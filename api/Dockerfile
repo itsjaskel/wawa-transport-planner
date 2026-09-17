@@ -4,7 +4,7 @@
 
 # --- Etapa 1: dependencias ---------------------------------------------------
 # Se copian primero los manifiestos y solo después el código fuente, para que un
-# cambio en el código no invalide la capa de instalacion de dependencias.
+# cambio en el código no invalide la capa de instalación de dependencias.
 FROM node:24-bookworm-slim AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./

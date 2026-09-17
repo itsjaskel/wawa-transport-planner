@@ -1,6 +1,6 @@
 /*
- * Base de estilos de Rumb@: variables de diseno, reinicio mínimo y ajustes globales.
- * Es la única hoja global junto con la de Leaflet; todo lo demas son módulos CSS.
+ * Base de estilos de Rumb@: variables de diseño, reinicio mínimo y ajustes globales.
+ * Es la única hoja global junto con la de Leaflet; todo lo demás son módulos CSS.
  */
 
 :root {
@@ -52,8 +52,8 @@
 /*
  * Puntos de quiebre del proyecto. Las variables CSS no se pueden usar dentro de
  * una media query, así que estos valores se repiten literalmente en cada hoja.
- * Se dejan declarados aquí para que exista una única referencia de cuales son:
- *   movil        hasta 599px  (diseno base, sin media query)
+ * Se dejan declarados aquí para que exista una única referencia de cuáles son:
+ *   móvil        hasta 599px  (diseño base, sin media query)
  *   tableta      desde 600px
  *   escritorio   desde 900px
  *   escritorio-amplio desde 1280px

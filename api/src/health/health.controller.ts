@@ -6,7 +6,7 @@ import { InjectConnection } from '@nestjs/mongoose';
 // Se importa como tipo, que desaparece al compilar. Ver la convención en CLAUDE.md.
 import type { Connection } from 'mongoose';
 
-// Valor de `readyState` de Mongoose que significa "conectado". Los demas son
+// Valor de `readyState` de Mongoose que significa "conectado". Los demás son
 // desconectado, conectando y desconectando.
 const MONGOOSE_CONNECTED_STATE = 1;
 

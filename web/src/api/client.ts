@@ -4,7 +4,7 @@
 // Vite incrusta esta variable en tiempo de compilación, no de ejecución.
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
-/** Error de una llamada a la api, con el código de estado para que la interfaz decida que mostrar. */
+/** Error de una llamada a la api, con el código de estado para que la interfaz decida qué mostrar. */
 export class ApiError extends Error {
   readonly statusCode: number;
 

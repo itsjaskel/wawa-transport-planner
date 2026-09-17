@@ -6,11 +6,13 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { createValidationException } from './common/errors/validation-errors.js';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter.js';
 
 const GLOBAL_API_PREFIX = 'api';
 const MAX_REQUEST_BODY_SIZE = '256kb';
 // Dentro de un contenedor hay que escuchar en todas las interfaces: con el valor
-// por defecto la api solo seria accesible desde dentro del propio contenedor.
+// por defecto la api solo sería accesible desde dentro del propio contenedor.
 const ALL_NETWORK_INTERFACES = '0.0.0.0';
 
 /** Arranca la api de Rumb@ con toda la configuración global aplicada. */
@@ -33,8 +35,12 @@ async function bootstrap(): Promise<void> {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // Sin esto, class-validator devuelve un texto por campo sin la ruta completa y los
+      // errores de los puntos anidados no dirían cuál de ellos falló.
+      exceptionFactory: createValidationException,
     }),
   );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const apiPort = configService.getOrThrow<number>('API_PORT');
   await app.listen(apiPort, ALL_NETWORK_INTERFACES);

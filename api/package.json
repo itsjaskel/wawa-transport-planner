@@ -1,7 +1,7 @@
 {
   "name": "rumbo-api",
   "version": "0.1.0",
-  "description": "Api de Rumb@, sistema de planificacion de transporte",
+  "description": "Api de Rumb@, sistema de planificación de transporte",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",

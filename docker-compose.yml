@@ -2,7 +2,7 @@
 # inicializa el replica set, carga datos de ejemplo y deja la aplicación usable.
 #
 # El nombre del proyecto se fija aquí a propósito: el nombre visible del producto es
-# `Rumb@`, pero el carácter @ no es valido como identificador técnico, así que todo lo
+# `Rumb@`, pero el carácter @ no es válido como identificador técnico, así que todo lo
 # técnico usa `rumbo`. Sin esta línea, Compose derivaría el nombre de la carpeta.
 name: rumbo
 
@@ -14,9 +14,9 @@ services:
   mongo:
     image: mongo:8.0.20
     container_name: rumbo-mongo
-    # `--quiet` silencia el registro de cada conexión abierta y cerrada. Sin el, el
-    # healthcheck (que abre un mongosh cada pocos segundos) inunda la salida de
-    # `docker compose up` y tapa los mensajes de los demas servicios.
+    # `--quiet` reduce parte del ruido del log, pero en MongoDB 8 ya no silencia los
+    # mensajes de conexión abierta y cerrada. Lo que de verdad los redujo fue el
+    # `directConnection=true` del healthcheck de abajo (ver CLAUDE.md, errores).
     command: ['mongod', '--replSet', 'rs0', '--bind_ip_all', '--quiet']
     ports:
       - '${MONGO_PORT:-27018}:27017'
@@ -24,7 +24,7 @@ services:
       - mongo_data:/data/db
     healthcheck:
       # Comprueba que haya un primario elegido, no solo que el proceso responda.
-      # Hasta que mongo-init no corra, este servicio estara "unhealthy", y es lo correcto.
+      # Hasta que mongo-init no corra, este servicio estará "unhealthy", y es lo correcto.
       # `directConnection=true` evita que mongosh descubra la topología en cada sondeo:
       # sin ella abre varias conexiones por comprobación y MongoDB las registra todas,
       # inundando la salida de `docker compose up`.
@@ -87,7 +87,7 @@ services:
     volumes:
       # El código fuente se monta para tener recarga en caliente, pero node_modules se
       # protege con un volumen propio: sin esto, la carpeta del host (vacía o compilada
-      # para Windows) pisaria la que se instalo dentro de la imagen.
+      # para Windows) pisaría la que se instaló dentro de la imagen.
       - ./api:/app
       - /app/node_modules
     healthcheck:
@@ -134,7 +134,7 @@ services:
     environment:
       # Vite incrusta las variables VITE_* en tiempo de compilación. En desarrollo eso
       # ocurre al arrancar el servidor, así que pasarla por entorno aquí funciona; si
-      # algún día se construye para producción habra que pasarla como argumento de build.
+      # algún día se construye para producción habrá que pasarla como argumento de build.
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
     ports:
       - '${WEB_PORT:-5173}:5173'

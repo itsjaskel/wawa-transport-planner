@@ -1,7 +1,7 @@
 {
   "name": "rumbo-web",
   "version": "0.1.0",
-  "description": "Interfaz de Rumb@, sistema de planificacion de transporte",
+  "description": "Interfaz de Rumb@, sistema de planificación de transporte",
   "private": true,
   "type": "module",
   "scripts": {

@@ -7,8 +7,8 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
-    // Los tests de integracion comparten una base real: si corriesen en paralelo
-    // se pisarian los datos entre archivos.
+    // Los tests de integración comparten una base real: si corriesen en paralelo
+    // se pisarían los datos entre archivos.
     fileParallelism: false,
   },
 });

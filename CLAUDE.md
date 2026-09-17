@@ -245,7 +245,7 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 ### Tests dentro del contenedor
 
 ```bash
-docker compose exec api npm test          # unitarios
+docker compose exec api npm test          # unitarios (15 tests, verdes en Fase 1)
 docker compose exec api npm run test:e2e  # integración contra la base real
 ```
 
@@ -356,6 +356,37 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
 | escritorio | 900px |
 | escritorio amplio | 1280px |
 
+### Convenciones de la api
+
+- **Errores:** todo error de negocio se lanza como `ApiException` (`api/src/common/errors/api-exception.ts`)
+  con un tipo estable de `API_ERROR_TYPES`. El filtro global es la única salida de errores; nunca se
+  devuelve un stack trace. Formato: `{ statusCode, error, message, details? }`.
+- **Errores de validación:** el `ValidationPipe` global usa `createValidationException`, que conserva la
+  ruta completa de los campos anidados. `details` es `[{ field: 'points.3.lat', messages: [...] }]`.
+- **Mensajes de validación en español**, escritos en cada decorador del dto con la opción `message`:
+  la interfaz los muestra junto al campo. Los que class-validator genera por su cuenta
+  (`whitelistValidation`, `nestedValidation`, `unknownValue`) se traducen en `validation-errors.ts`
+  **por la clave de la restricción**, no por el texto. `[verificado-en-dispositivo]`
+- **Errores HTTP ajenos** (los que generan Nest o Express, no nuestro código) no se emiten con su
+  mensaje original en inglés: el filtro los sustituye por tipo y mensaje propios según el código de
+  estado (`FOREIGN_HTTP_ERROR_BY_STATUS`). **Los errores del body parser de Express no son
+  `HttpException`**: el filtro los reconoce por su `type` `entity.*`. Ver error 7.
+  `[verificado-en-dispositivo]`
+- **Límites en un solo sitio:** las constantes (`MAX_POINTS_PER_ROUTE`, rangos de `lat`/`lng`…) se
+  declaran en el archivo del esquema y el dto las importa. Esquema y dto validan lo mismo a propósito:
+  el esquema protege las escrituras que no pasan por el dto.
+- **Forma pública de los documentos:** `buildPublicJsonOptions` en el `toJSON` de cada esquema expone
+  `id` en texto, quita `_id` y `__v` y oculta campos internos (`scheduleVersion`). **Consecuencia:** una
+  consulta con `.lean()` se salta el `toJSON` y devolvería `_id`; si se usa `lean` o `aggregate`, la
+  proyección debe construir `id` a mano (como hace `findAllRouteSummaries`).
+- **Textos:** los dtos recortan con `@TrimString()` / `@TrimOptionalString()` antes de validar; el
+  segundo convierte el texto vacío en ausente.
+- **Ids en la url:** siempre con `ParseObjectIdPipe`, que exige 24 dígitos hexadecimales. No se usa
+  `Types.ObjectId.isValid` porque acepta cualquier cadena de 12 caracteres. `[verificado-en-dispositivo]`
+  (test unitario).
+- **Actualizaciones:** siempre con `runValidators: true`; sin esa opción Mongoose no valida el esquema
+  en `findByIdAndUpdate`.
+
 ### Convención de imports de Mongoose (importante)
 
 Mongoose es **CommonJS**. En ESM, Node detecta sus exports con nombre mediante análisis estático, y
@@ -370,6 +401,7 @@ compilar y por tanto nunca falla:
 ```ts
 import type { Connection, Model, ClientSession } from 'mongoose';  // tipos
 import { Schema, Types } from 'mongoose';                          // valores en ejecución
+import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoose.Error.CastError, etc.
 ```
 
 `[verificado-en-dispositivo]` — se enumeraron los exports reales dentro del contenedor.
@@ -393,6 +425,18 @@ import { Schema, Types } from 'mongoose';                          // valores en
 | Validación de variables de entorno al arrancar | `api/src/config/env.validation.ts` |
 | Endpoint de salud y comprobación del replica set | `api/src/health/health.controller.ts` |
 | Carga idempotente de datos de ejemplo | `api/scripts/seed.ts` |
+| Formato de error uniforme y `ApiException` | `api/src/common/errors/api-exception.ts` |
+| Traducción de errores de validación con ruta de campo | `api/src/common/errors/validation-errors.ts` |
+| Filtro global de errores (400, 404, 409, 500) | `api/src/common/filters/api-exception.filter.ts` |
+| Validación de ObjectId en parámetros de url | `api/src/common/pipes/parse-object-id.pipe.ts` |
+| Forma pública de los documentos (`id`, campos ocultos) | `api/src/common/database/public-json.ts` |
+| Recorte de textos en los dtos | `api/src/common/transforms/trim-string.ts` |
+| Esquema de unidad y `scheduleVersion` | `api/src/units/schemas/unit.schema.ts` |
+| Validación del alta de unidad | `api/src/units/dto/create-unit.dto.ts` |
+| Endpoints y lógica de unidades | `api/src/units/units.controller.ts`, `api/src/units/units.service.ts` |
+| Esquema de ruta y puntos embebidos, límites | `api/src/routes/schemas/route.schema.ts` |
+| Validación de crear y reemplazar ruta | `api/src/routes/dto/save-route.dto.ts` |
+| Endpoints y lógica de rutas | `api/src/routes/routes.controller.ts`, `api/src/routes/routes.service.ts` |
 | Punto de entrada del frontend, TanStack Query | `web/src/main.tsx` |
 | Armazón de la interfaz | `web/src/App.tsx` |
 | Cliente HTTP único y `ApiError` | `web/src/api/client.ts` |
@@ -464,8 +508,13 @@ import { Schema, Types } from 'mongoose';                          // valores en
   `ñ` sin ningún ajuste. Fue una precaución infundada convertida en defecto.
 - **Cómo se detectó:** una captura de pantalla de la interfaz. Ninguna comprobación automática lo
   habría cazado, porque compila y pasa el linter perfectamente.
-- **Solución:** normalización de acentos en todos los archivos fuente y regla explícita en la
-  sección 6. `[verificado-en-dispositivo]`
+- **Solución:** normalización de acentos en los archivos fuente y regla explícita en la sección 6.
+- **La normalización quedó incompleta.** Al empezar la Fase 1 seguían sin tilde palabras en 11
+  archivos (`raiz`, `seria`, `demas`, `valido`, `estara`, `pisaria`, `instalo`, `habra`,
+  `integracion`, `instalacion`, `planificacion`, `diseno`, `movil`, `que mostrar`…). La etiqueta
+  `[verificado-en-dispositivo]` que tenía esta entrada afirmaba más de lo que se había comprobado.
+  Se detectó con una búsqueda por lista de palabras (`grep -w`), que es la comprobación a repetir:
+  la revisión visual no basta. Corregido en la Fase 1.
 
 ### 5. `docker compose exec` con rutas absolutas del contenedor desde Git Bash
 
@@ -475,6 +524,68 @@ import { Schema, Types } from 'mongoose';                          // valores en
   POSIX a rutas de Windows, aunque sean rutas **dentro del contenedor**.
 - **Cómo se detectó:** `MODULE_NOT_FOUND` con una ruta mezclada evidente.
 - **Solución:** usar rutas relativas, o prefijar con doble barra (`//app`), o `MSYS_NO_PATHCONV=1`.
+
+### 6. Comentario del compose que contradecía lo verificado
+
+- **Qué falló:** `docker-compose.yml` decía que `mongod --quiet` silencia el registro de conexiones,
+  cuando la entrada 3 de esta sección ya había comprobado que en MongoDB 8 no lo hace.
+- **Causa raíz:** al resolver el error 3 se actualizó `CLAUDE.md` pero no el comentario escrito antes
+  de la investigación.
+- **Cómo se detectó:** revisando los comentarios del compose al corregir tildes en la Fase 1.
+- **Solución:** comentario reescrito para que remita al `directConnection=true` del healthcheck.
+
+### 7. Un cuerpo mayor que el límite respondía 500 en lugar de 413
+
+- **Qué falló:** `POST /routes` con un cuerpo de más de 256 kb devolvía `500 InternalError`.
+- **Causa raíz:** el body parser de Express lanza un `PayloadTooLargeError` del paquete `http-errors`
+  (`status: 413`, `type: 'entity.too.large'`), que **no es una `HttpException` de Nest**. El filtro lo
+  trataba como error desconocido. El supuesto escrito en la sección 9 ("el filtro lo recibe como
+  `HttpException`") era falso.
+- **Cómo se detectó:** convirtiendo ese supuesto en una prueba con `curl` al levantar el entorno; el
+  log de la api mostraba el `PayloadTooLargeError` con su stack.
+- **Solución:** `isBodyParserError` en el filtro, más un test unitario. `[verificado-en-dispositivo]`
+
+### 8. La recarga en caliente de la api dejaba sirviendo el código viejo
+
+- **Qué falló:** tras editar un archivo, la api recompilaba sin errores pero seguía respondiendo con el
+  comportamiento anterior. El log mostraba `EADDRINUSE: address already in use 0.0.0.0:3000` en cada
+  reinicio.
+- **Causa raíz:** para reiniciar, `nest start --watch` mata el proceso anterior con su propio
+  `treeKillSync` (`@nestjs/cli/lib/utils/tree-kill.js`), que enumera los procesos hijos con `ps`. La
+  imagen `node:24-bookworm-slim` **no trae `ps`** (paquete `procps`), y `treeKillSync` trata ese fallo
+  como "sin hijos" **en silencio**. Solo muere el `sh -c` que envuelve a la api; `node dist/main` queda
+  huérfano (`ppid=1`), conserva el puerto y sigue sirviendo el código viejo.
+  `[verificado-contra-la-librería]` y `[verificado-en-dispositivo]` (se listaron los procesos en
+  `/proc` dentro del contenedor).
+- **Cómo se detectó:** un cambio corregido y con tests en verde seguía fallando por `curl`; el log de
+  la api tenía el `EADDRINUSE`.
+- **Relación con el error 2:** es posible que el error 2 de la Fase 0 fuera en parte este mismo
+  problema y no solo la falta de sondeo. `[supuesto]`
+- **Solución pendiente de aprobación:** instalar `procps` en la etapa `development` de
+  `api/Dockerfile`. Mientras tanto, tras cada cambio en la api: `docker compose restart api`.
+
+### 9. Tildes rotas al probar la api con `curl` desde Git Bash
+
+- **Qué falló:** un `PUT` con `"Coyoacán"` escrito en el argumento `-d` guardó `Coyoac�n`.
+- **Causa raíz:** `curl.exe` recibe los argumentos en la página de códigos de Windows y envía la `á`
+  como un único byte (0xE1) en lugar de UTF-8 (0xC3 0xA1). **No es un fallo de la api**: el mismo
+  cuerpo enviado desde un archivo UTF-8 se guarda correctamente.
+- **Cómo se detectó:** comparando el tamaño del cuerpo enviado (12 bytes para `{"code":"á"}`, cuando
+  en UTF-8 son 13) y los bytes guardados.
+- **Solución:** para enviar texto con tildes, escribir el cuerpo en un archivo y usar
+  `curl --data-binary @archivo.json`. `[verificado-en-dispositivo]`
+
+### 10. Docker Desktop no arrancaba: virtualización desactivada en la BIOS
+
+- **Qué falló:** Docker Desktop se quedaba en *deploying WSL2 distributions* con
+  `\\wsl$\docker-desktop\... The network name cannot be found`.
+- **Causa raíz:** la virtualización del procesador (SVM en AMD) estaba desactivada en la UEFI. WSL2
+  no podía crear su máquina virtual (`HCS_E_HYPERV_NOT_INSTALLED`). El mensaje de Docker era un
+  síntoma.
+- **Cómo se detectó:** `wsl -d docker-desktop` mostró el error real, y `systeminfo` indicaba
+  `Virtualization Enabled In Firmware: No`.
+- **Solución:** activar *SVM Mode* en la UEFI (ASUS: *Advanced → CPU Configuration*). Es un problema
+  de la máquina, no del proyecto. `[verificado-en-dispositivo]`
 
 ---
 
@@ -493,10 +604,16 @@ import { Schema, Types } from 'mongoose';                          // valores en
 - **La ruta del repositorio contiene `@`** (`C:\p\Rumb@\aplic`). Los bind mounts funcionan en esta
   máquina, pero es una variable que no controlamos. Si fallan en otro entorno, la solución es mover el
   repositorio a una ruta sin `@`. `[verificado-en-dispositivo]` en esta máquina.
-- **`app.useBodyParser('json', { limit })`** se aplica al arrancar y la api levanta sin error, pero no
-  se ha enviado un cuerpo mayor que el límite para comprobar que lo rechaza. `[compila]`
+- **`app.useBodyParser('json', { limit })`** rechaza un cuerpo de ~300 kb con `413 PayloadTooLarge`.
+  `[verificado-en-dispositivo]`
 - **El endpoint de disponibilidad de unidades** que necesitaría la vista previa de conflictos de la
   Fase 4 **no está en el contrato de la api** y está pendiente de decisión.
+- **La recarga en caliente de la api no es fiable** hasta que se apruebe instalar `procps` (error 8).
+  Tras cambiar código de la api: `docker compose restart api`. `[verificado-en-dispositivo]`
+- **Mensajes redundantes en un campo con el tipo equivocado:** si `code` llega como número o lista, se
+  devuelven a la vez los cuatro mensajes del campo ("debe ser texto", "es obligatorio"…). Es correcto,
+  pero ruidoso; se podría cortar en el primer fallo con `stopAtFirstError`. No se ha cambiado.
+  `[verificado-en-dispositivo]`
 - **Lecturas de duties solo por ruta.** `GET /routes/:id/duties` es la única lectura prevista; no hay
   forma de preguntar "qué tiene asignado esta unidad". Hueco conocido y aceptado para el MVP.
 
@@ -509,18 +626,22 @@ Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
 | Método | Ruta | Respuestas | Estado |
 |---|---|---|---|
 | GET | `/health` | 200 | **Hecho** |
-| GET | `/routes` | 200 | Fase 1 |
-| GET | `/routes/:id` | 200, 400, 404 | Fase 1 |
-| POST | `/routes` | 201, 400 | Fase 1 |
-| PUT | `/routes/:id` | 200, 400, 404 | Fase 1 |
+| GET | `/routes` | 200 | **Hecho** `[verificado-en-dispositivo]` |
+| GET | `/routes/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
+| POST | `/routes` | 201, 400 | **Hecho** `[verificado-en-dispositivo]` |
+| PUT | `/routes/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 | GET | `/routes/:id/duties` | 200, 404 | Fase 2 |
-| GET | `/units` | 200 | Fase 1 |
-| POST | `/units` | 201, 400, 409 | Fase 1 |
+| GET | `/units` | 200 | **Hecho** `[verificado-en-dispositivo]` |
+| POST | `/units` | 201, 400, 409 | **Hecho** `[verificado-en-dispositivo]` |
 | POST | `/duties` | 201, 400, 404, **409** | Fase 2 |
 | DELETE | `/duties/:id` | 204, 404 | Fase 2 |
 
-**Formato de error uniforme** mediante filtro global (Fase 1): código de estado, tipo, mensaje
-legible y detalles opcionales. Mapeos obligatorios:
+**Formato de error uniforme** mediante filtro global: `{ statusCode, error, message, details? }`.
+Tipos de `error`: `ValidationError` (con `details`), `BadRequest` (petición ilegible, por ejemplo
+JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conflict`,
+`PayloadTooLarge`, `InternalError`, `HttpError` (cualquier otro código ajeno). Mapeos obligatorios,
+cubiertos por `api-exception.filter.spec.ts` y comprobados con `curl` contra la api en Docker
+`[verificado-en-dispositivo]` (salvo el 409 de solapamiento, que llega en la Fase 2):
 
 | Situación | Respuesta |
 |---|---|
@@ -530,6 +651,18 @@ legible y detalles opcionales. Mapeos obligatorios:
 | Solapamiento | 409 **incluyendo id, ruta, inicio y fin del duty con el que choca** |
 | Cualquier otro error | 500 sin filtrar detalles internos ni stack traces |
 
+**Forma de las respuestas:**
+
+- `GET /routes`: `[{ id, name, pointCount, createdAt, updatedAt }]`, ordenado por `updatedAt`
+  descendente. No incluye los puntos.
+- Un `PUT` actualiza `updatedAt` y conserva `createdAt`. El nombre se recorta y un nombre de punto
+  vacío o de solo espacios desaparece de la respuesta.
+- `GET/POST/PUT /routes…`: `{ id, name, points: [{ lat, lng, name? }], createdAt, updatedAt }`.
+- `GET/POST /units`: `{ id, code, name, createdAt, updatedAt }`, ordenado por `code`. `code` se guarda
+  en mayúsculas y solo admite letras, dígitos y guiones; `bus-001` choca con `BUS-001` (409).
+  `scheduleVersion` se guarda como `0` y nunca aparece en las respuestas. `[verificado-en-dispositivo]`
+  (consultado en MongoDB, que además tiene el índice único `{ code: 1 }`).
+
 ---
 
 ## 11. Estado por fases
@@ -537,7 +670,7 @@ legible y detalles opcionales. Mapeos obligatorios:
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Entorno dockerizado, salud, memoria del proyecto | **Terminada** |
-| 1 | Rutas y unidades, filtro de errores, seed | Pendiente |
+| 1 | Rutas y unidades, filtro de errores, seed | **Verificada en Docker**; pendiente aprobar `procps` (error 8) |
 | 2 | Duties, regla de solapamiento, concurrencia | Pendiente |
 | 3 | Frontend completo | Pendiente |
 | 4 | Swagger, vista previa de conflictos, edición de duty | Opcional |

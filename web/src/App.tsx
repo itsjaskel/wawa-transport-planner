@@ -46,7 +46,7 @@ function ApiHealthDetails() {
   );
 }
 
-/** Componente raiz de Rumb@: cabecera de marca y panel de estado del entorno. */
+/** Componente raíz de Rumb@: cabecera de marca y panel de estado del entorno. */
 export default function App() {
   return (
     <div className={styles.app}>
