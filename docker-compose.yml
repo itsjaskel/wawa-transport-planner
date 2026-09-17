@@ -1,0 +1,147 @@
+# Entorno completo de Rumb@. Un solo `docker compose up` construye, levanta en orden,
+# inicializa el replica set, carga datos de ejemplo y deja la aplicación usable.
+#
+# El nombre del proyecto se fija aquí a propósito: el nombre visible del producto es
+# `Rumb@`, pero el carácter @ no es valido como identificador técnico, así que todo lo
+# técnico usa `rumbo`. Sin esta línea, Compose derivaría el nombre de la carpeta.
+name: rumbo
+
+services:
+  # --- 1. Base de datos ------------------------------------------------------
+  # Arranca como replica set de un solo nodo porque MongoDB solo admite transacciones
+  # sobre un replica set. Sin autenticación de forma deliberada: un replica set con
+  # autenticación exige un archivo de clave compartido, y esto es un entorno local.
+  mongo:
+    image: mongo:8.0.20
+    container_name: rumbo-mongo
+    # `--quiet` silencia el registro de cada conexión abierta y cerrada. Sin el, el
+    # healthcheck (que abre un mongosh cada pocos segundos) inunda la salida de
+    # `docker compose up` y tapa los mensajes de los demas servicios.
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all', '--quiet']
+    ports:
+      - '${MONGO_PORT:-27018}:27017'
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # Comprueba que haya un primario elegido, no solo que el proceso responda.
+      # Hasta que mongo-init no corra, este servicio estara "unhealthy", y es lo correcto.
+      # `directConnection=true` evita que mongosh descubra la topología en cada sondeo:
+      # sin ella abre varias conexiones por comprobación y MongoDB las registra todas,
+      # inundando la salida de `docker compose up`.
+      test:
+        - CMD
+        - mongosh
+        - mongodb://localhost:27017/?directConnection=true
+        - --quiet
+        - --eval
+        - if (!db.hello().isWritablePrimary) quit(1)
+      # Intervalo holgado a propósito: una vez elegido el primario, no cambia solo.
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  # --- 2. Inicialización del replica set -------------------------------------
+  # Servicio efímero e idempotente. Va aparte del arranque de la api porque la api no
+  # debe levantar hasta que exista un primario. Espera con reintentos a que mongo acepte
+  # conexiones, en lugar de depender del healthcheck de mongo, que solo pasa a verde
+  # después de que este servicio haya hecho su trabajo.
+  mongo-init:
+    image: mongo:8.0.20
+    container_name: rumbo-mongo-init
+    depends_on:
+      mongo:
+        condition: service_started
+    volumes:
+      - ./docker/mongo-init.js:/scripts/mongo-init.js:ro
+    entrypoint:
+      - bash
+      - -c
+      - |
+        until mongosh --host mongo:27017 --quiet --eval 'db.adminCommand({ ping: 1 })' > /dev/null 2>&1; do
+          echo '[mongo-init] esperando a que mongo acepte conexiones…'
+          sleep 1
+        done
+        mongosh --host mongo:27017 --file /scripts/mongo-init.js
+    restart: 'no'
+
+  # --- 3. Api ----------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      target: development
+    container_name: rumbo-api
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      API_PORT: 3000
+      # `directConnection=true` evita que el driver intente descubrir la topología del
+      # replica set. Sin ella, el driver recibiria del servidor el nombre del miembro
+      # (`mongo:27017`) y lo usaria también desde el host, donde ese nombre no resuelve.
+      MONGODB_URI: mongodb://mongo:27017/rumbo?directConnection=true
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - '${API_PORT:-3000}:3000'
+    volumes:
+      # El código fuente se monta para tener recarga en caliente, pero node_modules se
+      # protege con un volumen propio: sin esto, la carpeta del host (vacía o compilada
+      # para Windows) pisaria la que se instalo dentro de la imagen.
+      - ./api:/app
+      - /app/node_modules
+    healthcheck:
+      # La imagen slim no trae curl ni wget, así que se usa el fetch de Node.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # --- 4. Datos de ejemplo ---------------------------------------------------
+  # Servicio efímero e idempotente. Habla con la api por HTTP en lugar de escribir en
+  # MongoDB directamente, para pasar por las mismas validaciones que un usuario real
+  # y no duplicar la definición de los esquemas.
+  seed:
+    build:
+      context: ./api
+      target: development
+    container_name: rumbo-seed
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: http://api:3000/api
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    command: ['npm', 'run', 'seed']
+    restart: 'no'
+
+  # --- 5. Interfaz -----------------------------------------------------------
+  web:
+    build:
+      context: ./web
+      target: development
+    container_name: rumbo-web
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Vite incrusta las variables VITE_* en tiempo de compilación. En desarrollo eso
+      # ocurre al arrancar el servidor, así que pasarla por entorno aquí funciona; si
+      # algún día se construye para producción habra que pasarla como argumento de build.
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+
+volumes:
+  mongo_data:
+    name: rumbo_mongo_data

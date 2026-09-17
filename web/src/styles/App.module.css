@@ -1,0 +1,140 @@
+/* Estilos del armazon de la aplicación: cabecera, contenedor principal y estado de la api. */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background-color: var(--color-superficie);
+  border-bottom: 1px solid var(--color-borde);
+  padding: var(--espacio-md);
+}
+
+.headerInner {
+  width: 100%;
+  max-width: var(--ancho-máximo-contenido);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-xs);
+}
+
+.brand {
+  font-size: var(--tamaño-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--color-primario);
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--ancho-máximo-contenido);
+  margin: 0 auto;
+  padding: var(--espacio-lg) var(--espacio-md);
+}
+
+.card {
+  background-color: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-suave);
+  padding: var(--espacio-lg);
+}
+
+.cardTitle {
+  font-size: var(--tamaño-lg);
+  font-weight: var(--peso-medio);
+  margin-bottom: var(--espacio-md);
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-sm);
+  margin-bottom: var(--espacio-sm);
+}
+
+.statusLabel {
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-xs);
+  padding: var(--espacio-xs) var(--espacio-sm);
+  border-radius: var(--radio-sm);
+  font-size: var(--tamaño-xs);
+  font-weight: var(--peso-medio);
+}
+
+.badgeLoading {
+  background-color: #e8ecf3;
+  color: var(--color-texto-suave);
+}
+
+.badgeOk {
+  background-color: #e3f3ea;
+  color: var(--color-exito);
+}
+
+.badgeError {
+  background-color: #fbe9e7;
+  color: var(--color-error);
+}
+
+.detailList {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-xs) var(--espacio-md);
+  font-size: var(--tamaño-sm);
+}
+
+.detailTerm {
+  color: var(--color-texto-suave);
+}
+
+.detailValue {
+  margin: 0;
+  font-weight: var(--peso-medio);
+  overflow-wrap: anywhere;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--tamaño-sm);
+}
+
+/* Desde tableta hay sitio para poner cada dato y su etiqueta en la misma fila. */
+@media (min-width: 600px) {
+  .header {
+    padding: var(--espacio-md) var(--espacio-lg);
+  }
+
+  .headerInner {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--espacio-md);
+  }
+
+  .main {
+    padding: var(--espacio-xl) var(--espacio-lg);
+  }
+
+  .detailList {
+    grid-template-columns: auto 1fr;
+  }
+}

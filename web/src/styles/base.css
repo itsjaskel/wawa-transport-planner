@@ -1,0 +1,104 @@
+/*
+ * Base de estilos de Rumb@: variables de diseno, reinicio mínimo y ajustes globales.
+ * Es la única hoja global junto con la de Leaflet; todo lo demas son módulos CSS.
+ */
+
+:root {
+  /* Color */
+  --color-fondo: #f5f7fa;
+  --color-superficie: #ffffff;
+  --color-borde: #d8dee9;
+  --color-texto: #1c2430;
+  --color-texto-suave: #55627a;
+  --color-primario: #1d5fd6;
+  --color-primario-oscuro: #17499f;
+  --color-primario-contraste: #ffffff;
+  --color-exito: #1b7f4f;
+  --color-error: #b3261e;
+  --color-aviso: #8a5a00;
+  --color-foco: #1d5fd6;
+
+  /* Espaciado */
+  --espacio-xs: 0.25rem;
+  --espacio-sm: 0.5rem;
+  --espacio-md: 1rem;
+  --espacio-lg: 1.5rem;
+  --espacio-xl: 2.5rem;
+
+  /* Tipografía */
+  --fuente-base:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --tamaño-xs: 0.8125rem;
+  --tamaño-sm: 0.9375rem;
+  --tamaño-md: 1rem;
+  --tamaño-lg: 1.25rem;
+  --tamaño-xl: 1.75rem;
+  --peso-normal: 400;
+  --peso-medio: 600;
+  --peso-fuerte: 700;
+  --interlineado: 1.55;
+
+  /* Radios y sombras */
+  --radio-sm: 4px;
+  --radio-md: 8px;
+  --radio-lg: 14px;
+  --sombra-suave: 0 1px 3px rgba(28, 36, 48, 0.12);
+
+  /* Medidas */
+  --ancho-máximo-contenido: 72rem;
+  --altura-minima-toque: 44px;
+}
+
+/*
+ * Puntos de quiebre del proyecto. Las variables CSS no se pueden usar dentro de
+ * una media query, así que estos valores se repiten literalmente en cada hoja.
+ * Se dejan declarados aquí para que exista una única referencia de cuales son:
+ *   movil        hasta 599px  (diseno base, sin media query)
+ *   tableta      desde 600px
+ *   escritorio   desde 900px
+ *   escritorio-amplio desde 1280px
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Evita que iOS agrande el texto al girar el dispositivo. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--fuente-base);
+  font-size: var(--tamaño-md);
+  line-height: var(--interlineado);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+a {
+  color: var(--color-primario);
+}
+
+/* El foco de teclado debe verse siempre: es el único rastro visual para quien no usa raton. */
+:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
