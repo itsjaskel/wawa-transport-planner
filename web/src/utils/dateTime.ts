@@ -52,6 +52,14 @@ export function convertLocalInputToIso(localInputValue: string): string {
   return `${localInputValue}:00${offset}`;
 }
 
+/** Convierte un instante ISO al valor de un `<input type="datetime-local">` en la hora local. */
+export function convertIsoToLocalInput(isoDate: string): string {
+  const date = new Date(isoDate);
+  const datePart = `${date.getFullYear()}-${padTwoDigits(date.getMonth() + 1)}-${padTwoDigits(date.getDate())}`;
+  const timePart = `${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}`;
+  return `${datePart}T${timePart}`;
+}
+
 /** Indica si el valor de un `<input type="datetime-local">` es una fecha válida. */
 export function isValidLocalInput(localInputValue: string): boolean {
   return localInputValue !== '' && !Number.isNaN(new Date(localInputValue).getTime());

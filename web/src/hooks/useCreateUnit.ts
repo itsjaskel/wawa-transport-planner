@@ -12,6 +12,8 @@ export function useCreateUnit() {
     mutationFn: (unitInput: CreateUnitInput) => sendApiJson<Unit>('POST', '/units', unitInput),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.units });
+      // La disponibilidad lista todas las unidades: también queda desactualizada.
+      queryClient.invalidateQueries({ queryKey: queryKeys.unitAvailabilityRoot });
     },
   });
 }

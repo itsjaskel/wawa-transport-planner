@@ -15,6 +15,8 @@ import { Route, type RouteDocument } from '../routes/schemas/route.schema.js';
 import { Unit, type UnitDocument } from '../units/schemas/unit.schema.js';
 import { buildOverlapFilter, type TimeWindow } from './domain/overlap.js';
 import type { CreateDutyDto } from './dto/create-duty.dto.js';
+import type { UnitAvailabilityQueryDto } from './dto/unit-availability-query.dto.js';
+import type { UpdateDutyDto } from './dto/update-duty.dto.js';
 import { Duty, type DutyDocument } from './schemas/duty.schema.js';
 
 // Etiquetas con que MongoDB marca los errores de una transacción que merecería reintentarse.
@@ -40,6 +42,24 @@ export interface UnitDutyRoute {
   id: string;
   name: string;
   dutyCount: number;
+}
+
+/** Duty que ocupa a una unidad durante una ventana consultada. */
+export interface OccupyingDuty {
+  id: string;
+  routeId: string;
+  routeName: string;
+  startAt: Date;
+  endAt: Date;
+}
+
+/** Una unidad y si está libre en una ventana. */
+export interface UnitAvailability {
+  unitId: string;
+  code: string;
+  name: string;
+  isAvailable: boolean;
+  occupyingDuty?: OccupyingDuty;
 }
 
 /** Recuento de duties de una unidad agrupado por ruta, tal como sale de la agregación. */
@@ -150,16 +170,19 @@ export class DutiesService {
     return route;
   }
 
-  /** Busca, dentro de la transacción, un duty de la unidad cuya ventana se solape con la nueva. */
+  /** Busca, dentro de la transacción, un duty de la unidad cuya ventana se solape con la nueva; al editar, sin contar el propio. */
   private async findOverlappingDuty(
     unitId: string,
     newWindow: TimeWindow,
     session: ClientSession,
+    excludedDutyId?: string,
   ): Promise<DutyDocument | null> {
-    return this.dutyModel
-      .findOne({ unitId, ...buildOverlapFilter(newWindow) })
-      .session(session)
-      .exec();
+    const overlapFilter: Record<string, unknown> = { unitId, ...buildOverlapFilter(newWindow) };
+    if (excludedDutyId !== undefined) {
+      // Sin esto, al editar un duty su propia ventana chocaría consigo misma.
+      overlapFilter._id = { $ne: excludedDutyId };
+    }
+    return this.dutyModel.findOne(overlapFilter).session(session).exec();
   }
 
   /** Construye el error 409 con los datos del duty con el que choca, leídos dentro de la transacción. */
@@ -191,6 +214,57 @@ export class DutiesService {
         `en la ruta "${conflictingRouteName}".`,
       { conflictingDuty },
     );
+  }
+
+  /** Cambia la unidad y la ventana de un duty con la misma garantía que al crearlo; 404 si faltan el duty o la unidad y 409 si se solapa. */
+  async updateDuty(dutyId: string, updateDutyDto: UpdateDutyDto): Promise<DutyDocument> {
+    const newWindow: TimeWindow = {
+      startAt: new Date(updateDutyDto.startAt),
+      endAt: new Date(updateDutyDto.endAt),
+    };
+    const session = await this.databaseConnection.startSession();
+
+    try {
+      return await session.withTransaction(() =>
+        this.updateDutyInsideTransaction(dutyId, updateDutyDto.unitId, newWindow, session),
+      );
+    } catch (error) {
+      throw translateTransactionError(error);
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /** Ejecuta, dentro de la transacción, el bloqueo de la unidad de destino, las comprobaciones y el cambio. */
+  private async updateDutyInsideTransaction(
+    dutyId: string,
+    targetUnitId: string,
+    newWindow: TimeWindow,
+    session: ClientSession,
+  ): Promise<DutyDocument> {
+    // Se bloquea la unidad de destino, que es la única que puede quedar con un solapamiento. La de
+    // origen solo pierde un duty, y eso no puede crear ningún conflicto.
+    const lockedUnit = await this.lockUnitSchedule(targetUnitId, session);
+
+    const duty = await this.dutyModel.findById(dutyId).session(session).exec();
+    if (!duty) {
+      throw createNotFoundException(`No existe un duty con id ${dutyId}.`);
+    }
+
+    const overlappingDuty = await this.findOverlappingDuty(
+      targetUnitId,
+      newWindow,
+      session,
+      dutyId,
+    );
+    if (overlappingDuty) {
+      throw await this.createOverlapConflict(overlappingDuty, lockedUnit, session);
+    }
+
+    // Se guarda el documento cargado, y no con `updateOne`, para que corra el validador del esquema
+    // (`endAt > startAt`), que necesita el documento completo.
+    duty.set({ unitId: targetUnitId, startAt: newWindow.startAt, endAt: newWindow.endAt });
+    return duty.save({ session });
   }
 
   /** Elimina un duty; 404 si no existe. */
@@ -270,6 +344,64 @@ export class DutiesService {
         dutyCount: routeDutyCount.dutyCount,
       };
     });
+  }
+
+  /** Indica qué unidades están libres en una ventana y, de las ocupadas, qué duty las ocupa. */
+  async findUnitAvailability(
+    availabilityQuery: UnitAvailabilityQueryDto,
+  ): Promise<UnitAvailability[]> {
+    // Es una ayuda para planificar, no la garantía: se lee sin transacción, y otra persona puede
+    // ocupar una unidad libre un instante después. La garantía la da `createDuty` al asignar.
+    const availabilityWindow: TimeWindow = {
+      startAt: new Date(availabilityQuery.startAt),
+      endAt: new Date(availabilityQuery.endAt),
+    };
+    const units = await this.unitModel.find({}, { code: 1, name: 1 }).sort({ code: 1 }).exec();
+    const overlappingDuties = await this.findDutiesOverlappingWindow(
+      availabilityWindow,
+      availabilityQuery.excludeDutyId,
+    );
+    const routeNamesById = await this.findRouteNamesById(overlappingDuties);
+
+    return units.map((unit) => {
+      const occupyingDuty = overlappingDuties.find((duty) => duty.unitId.equals(unit._id));
+      const unitAvailability: UnitAvailability = {
+        unitId: unit.id,
+        code: unit.code,
+        name: unit.name,
+        isAvailable: occupyingDuty === undefined,
+      };
+      if (occupyingDuty) {
+        unitAvailability.occupyingDuty = {
+          id: occupyingDuty.id,
+          routeId: String(occupyingDuty.routeId),
+          routeName: routeNamesById.get(String(occupyingDuty.routeId)) ?? '(ruta eliminada)',
+          startAt: occupyingDuty.startAt,
+          endAt: occupyingDuty.endAt,
+        };
+      }
+      return unitAvailability;
+    });
+  }
+
+  /** Devuelve los duties de cualquier unidad que se solapan con la ventana, salvo el indicado. */
+  private async findDutiesOverlappingWindow(
+    window: TimeWindow,
+    excludedDutyId: string | undefined,
+  ): Promise<DutyDocument[]> {
+    // La misma condición que usa la asignación: si la regla cambia, cambia en los dos sitios a la vez.
+    const overlapFilter: Record<string, unknown> = buildOverlapFilter(window);
+    if (excludedDutyId !== undefined) {
+      overlapFilter._id = { $ne: excludedDutyId };
+    }
+    return this.dutyModel.find(overlapFilter).sort({ startAt: 1 }).exec();
+  }
+
+  /** Devuelve el nombre de cada ruta de los duties indicados, por id de ruta. */
+  private async findRouteNamesById(duties: DutyDocument[]): Promise<Map<string, string>> {
+    const routeIds = duties.map((duty) => duty.routeId);
+    const routes = await this.routeModel.find({ _id: { $in: routeIds } }, { name: 1 }).exec();
+    return new Map(routes.map((route) => [route.id as string, route.name]));
   }
 
   /** Devuelve los duties de una ruta con los datos de su unidad, ordenados por inicio; 404 si la ruta no existe. */

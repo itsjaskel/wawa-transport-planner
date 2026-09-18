@@ -60,6 +60,9 @@ correcto.
   impedir el borrado, elegí impedirlo: nunca se pierde el historial de turnos por un clic. Decidí
   también que el código de la unidad no se edite, solo su nombre, y que esto fuera un paso aparte y
   no parte de las funciones opcionales.
+- **Funciones opcionales:** hacer todas las que propone el brief salvo GraphQL y Prisma, que no
+  resuelven ningún problema de este MVP. Autoricé la única dependencia nueva que hizo falta,
+  `@nestjs/swagger`.
 - **Cambio de regla durante el proyecto:** al principio reservé para mí el README y esta bitácora.
   Después de la Fase 2 decidí que la IA mantuviera las instrucciones de uso del README en cada fase,
   y más tarde que redactara también el resto del README y esta bitácora, que yo reviso.
@@ -83,6 +86,11 @@ por qué me parecieron correctas:
 | Sacar la configuración global a un archivo compartido por la api y los tests | Así los tests prueban la api exactamente como corre. |
 | El 409 al borrar una unidad con duties indica en qué rutas están, con enlaces | Sin eso, el mensaje "tiene 3 duties, elimínalos antes" deja al planificador sin saber dónde buscarlos: no hay otra forma de ver los duties de una unidad. |
 | Borrar la unidad dentro de una transacción, sin un contador propio | El borrado ya escribe en el mismo documento que la asignación de un duty, así que MongoDB detecta el choque igual. La IA lo propuso primero con un contador y lo corrigió antes de implementarlo. |
+| La vista previa de disponibilidad usa la misma condición que la asignación, y se presenta como ayuda | Así no hay dos reglas que puedan divergir, y nadie la confunde con la garantía: el 409 al guardar sigue siendo la última palabra. |
+| En el formulario, primero el horario y después la unidad; las ocupadas, deshabilitadas | Con el horario elegido se sabe quién está libre: el planificador elige entre opciones válidas en lugar de descubrir el conflicto al guardar. |
+| Editar un duty con la misma transacción, bloqueando solo la unidad de destino y sin contar el propio duty | La unidad de origen solo pierde un duty y no puede quedar con un solapamiento; sin excluir el propio duty, acortar tu propio horario chocaría contigo mismo. |
+| Trazar la ruta por las calles con OSRM, llamado desde el navegador, solo en el detalle y con vuelta a la línea recta si falla | No pide clave ni cuenta, así que el proyecto sigue levantando sin configurar nada; la api no depende de un servicio externo; y pedir un trazado en cada clic del editor abusaría de un servidor público. |
+| Documentar Swagger con anotaciones explícitas en lugar del plugin del CLI | Se ve qué se documenta sin conocer la magia del plugin, y los tests (que no pasan por el CLI) ven la misma documentación que producción. |
 | Instalar `procps` en la imagen y añadir `init: true` al contenedor | Resolvían la recarga en caliente y los procesos zombis (ver abajo). La IA no los aplicó hasta que los aprobé, porque eran dependencias nuevas. |
 
 ## Dónde corregí a la IA o no di algo por bueno
@@ -124,6 +132,10 @@ que cambiaron el resultado:
 - **Una rejilla que ensanchaba la página en móvil.** Al editar una unidad en el móvil, la página se
   desplazaba 8 px de lado: las columnas definidas con `1fr` no bajan del ancho de su contenido. Se
   cambiaron todas las rejillas a `minmax(0, 1fr)`.
+- **Una prueba de la interfaz mal planteada borró un dato que no había creado.** El script de la
+  Fase 4 buscaba "el duty de BUS-002" en lugar del duty concreto que acababa de crear; encontró otro
+  que ya existía y lo borró al limpiar. La interfaz se había comportado bien; el fallo era de la
+  prueba. Se corrigió identificando el duty por su id y deteniendo la prueba si no lo encuentra.
 - **Fallos del entorno, no del código:** virtualización desactivada en la BIOS y el reloj del sistema
   desfasado tres horas, que rompía la construcción de imágenes. Se documentaron para quien levante el
   proyecto en otra máquina.

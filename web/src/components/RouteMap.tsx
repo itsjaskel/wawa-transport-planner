@@ -20,6 +20,8 @@ const ROUTE_LINE_OPTIONS = { className: 'route-line', weight: 4 };
 
 interface RouteMapProps {
   points: RoutePoint[];
+  /** Si se indica, la línea sigue este recorrido por calles en lugar de unir los puntos en recta. */
+  roadPositions?: LatLngTuple[];
   /** Si se indica, el mapa es editable: cada clic añade un punto con esas coordenadas. */
   onAddPoint?: (lat: number, lng: number) => void;
 }
@@ -77,7 +79,7 @@ function MapClickListener({ onAddPoint }: { onAddPoint: (lat: number, lng: numbe
 }
 
 /** Dibuja los puntos de una ruta numerados y unidos por una línea, ajustando el encuadre a todos ellos. */
-export function RouteMap({ points, onAddPoint }: RouteMapProps) {
+export function RouteMap({ points, roadPositions, onAddPoint }: RouteMapProps) {
   const isEditable = onAddPoint !== undefined;
   const positions = useMemo<LatLngTuple[]>(
     () => points.map((point) => [point.lat, point.lng]),
@@ -92,7 +94,7 @@ export function RouteMap({ points, onAddPoint }: RouteMapProps) {
   return (
     <MapContainer className={mapClassName} center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM}>
       <TileLayer url={TILE_LAYER_URL} attribution={TILE_LAYER_ATTRIBUTION} />
-      <Polyline positions={positions} pathOptions={ROUTE_LINE_OPTIONS} />
+      <Polyline positions={roadPositions ?? positions} pathOptions={ROUTE_LINE_OPTIONS} />
       {points.map((point, pointIndex) => {
         const pointNumber = pointIndex + 1;
         const markerTitle = point.name ? `${pointNumber}. ${point.name}` : `Punto ${pointNumber}`;

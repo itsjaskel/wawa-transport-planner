@@ -17,7 +17,9 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
 | Persistencia en MongoDB | Terminado |
 | Entorno completo con un solo comando | Terminado |
 | Interfaz: lista de rutas, detalle con mapa y duties, formularios | Terminado y probado en móvil, tableta y escritorio |
-| Documentación Swagger, vista previa de conflictos, edición de duty | Opcional, pendiente |
+| Documentación de la api (Swagger) | Terminado |
+| Vista previa de disponibilidad y edición de duties | Terminado y probado, con contraprueba |
+| Trazado de la ruta por las calles, con distancia y tiempo | Terminado |
 
 ## Qué construí
 
@@ -31,7 +33,8 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
   el historial de turnos por un clic. Si tiene alguno, la aplicación dice cuántos y en qué rutas
   están, con enlaces para ir a quitarlos. El código no se edita: es lo que el planificador ve en los
   mensajes de conflicto, y cambiarlo sobre la marcha confunde más de lo que ayuda.
-- **Duties:** asignar, borrar y listar los duties de una ruta. El duty guarda **inicio y fin
+- **Duties:** asignar, editar (unidad y horario), borrar y listar los duties de una ruta. La ruta de
+  un duty no se cambia: un duty en otra ruta es otro duty. El duty guarda **inicio y fin
   explícitos**, no inicio más duración: el fin es justo lo que se compara al buscar solapamientos,
   así que preferí que fuera un dato y no un cálculo.
 - **Persistencia real** en MongoDB.
@@ -39,11 +42,19 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
 ### La interfaz
 
 - **Lista de rutas** con su cantidad de puntos y cuándo se actualizó cada una.
-- **Detalle de una ruta:** el mapa con los puntos numerados en su orden y unidos por una línea, la
-  lista de puntos, los duties asignados (unidad, inicio, fin y duración) y un formulario para asignar
+- **Detalle de una ruta:** el mapa con los puntos numerados en su orden y unidos **por las calles
+  reales**, con la distancia y el tiempo estimado en coche (*"9 km · 17 min"*), la lista de puntos, los duties asignados (unidad, inicio, fin y duración) y un formulario para asignar
   uno nuevo. Si la unidad está ocupada, la pantalla lo explica en concreto: *"La unidad BUS-001 ya
   tiene un duty el 19 sep 2026, 04:00 – 08:00 (UTC−04:00) en la ruta Centro - Polanco"*, con un enlace
   a esa ruta.
+- **Qué unidad está libre.** Al asignar un duty, primero se elige el horario y el selector de
+  unidades muestra cuáles están libres y cuáles ocupadas, y dónde: *"BUS-001 · ocupada: Centro -
+  Polanco, 04:00–08:00"*. Las ocupadas no se pueden elegir. Es la pregunta real de quien planifica
+  ("¿qué unidad tengo libre en este horario?") y la contesta antes de fallar, no después. Aun así es
+  una ayuda: si otra persona ocupa la unidad un instante después, al guardar salta el conflicto de
+  siempre.
+- **Editar un duty** desde su fila: se abre el mismo formulario, con la vista previa incluida, en una
+  tarjeta encima de la tabla.
 - **Crear y editar rutas** haciendo clic en el mapa: cada clic añade un punto al final. Los puntos se
   pueden renombrar, corregir a mano, reordenar y quitar, y la línea se redibuja al instante.
 - **Unidades:** alta, listado, edición del nombre en la propia fila y borrado con confirmación.
@@ -85,6 +96,13 @@ aunque la api corra en varias instancias.
   función: un error en la consulta pasaría desapercibido si solo probara la función.
 - Lancé 10 peticiones simultáneas solapadas sobre la misma unidad: **se crea exactamente 1**. Y 10
   simultáneas que no se solapan: **se crean las 10**; el bloqueo ordena, no descarta.
+- **Editar un duty tiene la misma garantía que crearlo:** misma transacción y mismo contador sobre la
+  unidad de destino, y la búsqueda de solapamientos no cuenta al propio duty (si no, acortar tu propio
+  horario chocaría contigo mismo). Moví 10 duties distintos a la vez a la misma hora de la misma
+  unidad: **solo 1 lo consiguió**. Sin el contador, 3 de 10 lo consiguieron, en tres ejecuciones
+  seguidas.
+- La vista previa de disponibilidad usa **exactamente la misma condición** que la asignación, así que
+  no hay dos reglas que puedan contradecirse. La pruebo con la misma tabla de 9 casos.
 - El borrado de una unidad sigue la misma lógica: se hace dentro de una transacción que escribe en
   el mismo documento que la asignación de un duty. Lancé 40 rondas de "asignar un duty y borrar su
   unidad a la vez": **nunca quedó un duty apuntando a una unidad borrada**. Y al quitar la
@@ -107,9 +125,16 @@ aunque la api corra en varias instancias.
 - Añadí cabeceras de seguridad, CORS limitado al origen de la interfaz y un límite de tamaño para las
   peticiones.
 
+### Documentación de la api
+
+La api se documenta sola con Swagger en `http://localhost:3000/api/docs`: cada endpoint con su
+cuerpo, sus respuestas (también las de error) y ejemplos, y se puede probar desde el navegador. Escribí
+las anotaciones a mano en lugar de dejar que el plugin de Nest las dedujera: son más líneas, pero se
+ve exactamente qué se documenta. Una prueba falla si algún endpoint se queda sin documentar.
+
 ### Pruebas automatizadas
 
-La api tiene 33 pruebas unitarias y 31 de integración contra MongoDB real, incluidas las de
+La api tiene 33 pruebas unitarias y 50 de integración contra MongoDB real, incluidas las de
 concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
 
 La interfaz no tiene pruebas automatizadas (lo explico abajo). La recorrí con clics reales en un
@@ -141,11 +166,10 @@ donde no conviene.
 | Autenticación y roles | No aporta a lo que se evalúa, y hacerla bien lleva más tiempo del que justifica un MVP. |
 | Borrar rutas | Obliga a decidir qué pasa con sus duties (¿se borran?, ¿se impide?). Para las unidades lo decidí (solo sin duties); para las rutas no lo necesité todavía. |
 | Borrar una unidad junto con sus duties, o darla de baja sin borrarla | Consideré las dos opciones. Borrar en cascada hace que un clic se lleve el historial; la baja lógica añade un estado nuevo al modelo. Elegí la más segura: solo se borra si no tiene duties. |
-| Editar un duty | Hoy se borra y se crea de nuevo. Editarlo exige la misma garantía de concurrencia; queda como opcional. |
 | Consultar qué tiene asignado una unidad | Solo se consultan los duties por ruta, que es lo que pide el brief. |
 | Duties recurrentes (todos los lunes…) | Los duties son fechas absolutas. Los recurrentes cambian por completo el modelo de la regla. |
 | GraphQL y Prisma | No resuelven ningún problema de este MVP y añadirían una capa más que mantener. |
-| Cálculo de trayectos sobre calles | El mapa une los puntos en línea recta, sobre OpenStreetMap. Calcular recorridos reales exige un servicio externo con cuenta, y quiero que el proyecto levante sin configurar nada. |
+| Trazado por calles en el editor de rutas | El detalle de una ruta la dibuja por las calles con OSRM, un servicio abierto sin clave ni cuenta. En el editor sigue en línea recta: pedir un trazado en cada clic abusaría de un servidor público de demostración. |
 | Pruebas automatizadas de la interfaz | El brief pone el foco en la lógica crítica, que está en la api y está cubierta. Para la interfaz habría que añadir herramientas nuevas; preferí recorrer los flujos a mano en un navegador. |
 | Mostrar las horas en la zona de la flota | Muestro cada hora en la zona de quien mira, con su desfase UTC visible. Si la flota operara siempre en una zona concreta, convendría mostrar todo en esa zona; es una constante de configuración que no añadí sin saberlo. |
 | Paginación | Con los volúmenes de un MVP no hace falta. |
@@ -156,14 +180,19 @@ donde no conviene.
 - **Evaluaría en serio PostgreSQL** con la restricción de exclusión, para que la base garantice la
   regla por sí misma. Si hubiera que quedarse en MongoDB, añadiría una verificación periódica que
   busque solapamientos y avise, como red de seguridad independiente del código.
-- **Añadiría una vista de disponibilidad:** al elegir una ventana, marcar qué unidades están libres. La pregunta
-  real del planificador es "¿qué unidad tengo libre para esta ruta en este horario?", no "¿por qué
-  falló mi asignación?".
+- **Añadiría una vista por unidad:** hoy la disponibilidad responde "¿quién está libre a esta hora?",
+  pero no hay una pantalla con la agenda completa de cada vehículo.
 - **Automatizaría las pruebas de extremo a extremo de la interfaz** (por ejemplo con Playwright) y
   montaría un pipeline de integración continua que ejecute todas las pruebas, incluida la contraprueba, en cada cambio.
 - **Probaría el caso límite de contención extrema:** si las transacciones agotan sus reintentos, la
   api responde 503. Ese camino está programado y contrastado con el código del driver de MongoDB, pero
   no lo he provocado en una prueba.
+- **Usaría un servidor de trazado propio o un proveedor con contrato.** Hoy el trazado lo pide el
+  navegador al servidor público de demostración de OSRM: no tiene garantías de disponibilidad y recibe
+  las coordenadas de las rutas. Si falla, el mapa vuelve a la línea recta y lo dice, así que el núcleo
+  no depende de él.
+- **Avisaría si un duty es más corto que el recorrido:** con el tiempo estimado por calles, la interfaz
+  podría advertir cuando la ventana asignada no alcanza para recorrer la ruta.
 - **Guardaría una auditoría de cambios:** quién asignó o borró cada duty y cuándo.
 - **Dividiría el código de la interfaz en partes que se carguen por separado.** Hoy el mapa y React
   van en un solo archivo de unos 760 kB (230 kB comprimido); para un MVP es aceptable.
@@ -212,6 +241,7 @@ docker compose up --build -d
 |---|---|
 | Interfaz | http://localhost:5173 (abre el listado de rutas) |
 | Api | http://localhost:3000/api |
+| Documentación de la api (Swagger) | http://localhost:3000/api/docs |
 | Estado de la api | http://localhost:3000/api/health |
 
 La aplicación está lista cuando el estado de la api responde:

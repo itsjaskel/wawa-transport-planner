@@ -1,4 +1,5 @@
 // Datos que acepta la api para dar de alta una unidad.
+import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 import { TrimString } from '../../common/transforms/trim-string.js';
 import { MAX_UNIT_CODE_LENGTH, MAX_UNIT_NAME_LENGTH } from '../schemas/unit.schema.js';
@@ -8,6 +9,12 @@ const UNIT_CODE_PATTERN = /^[A-Za-z0-9-]+$/;
 
 /** Cuerpo de `POST /units`: código único y nombre de la unidad. */
 export class CreateUnitDto {
+  @ApiProperty({
+    example: 'BUS-004',
+    maxLength: MAX_UNIT_CODE_LENGTH,
+    pattern: UNIT_CODE_PATTERN.source,
+    description: 'Código único. Se guarda en mayúsculas: `bus-004` y `BUS-004` son el mismo.',
+  })
   @TrimString()
   @IsString({ message: 'El código debe ser texto.' })
   @IsNotEmpty({ message: 'El código es obligatorio.' })
@@ -19,6 +26,7 @@ export class CreateUnitDto {
   })
   code: string;
 
+  @ApiProperty({ example: 'Autobús 4', maxLength: MAX_UNIT_NAME_LENGTH })
   @TrimString()
   @IsString({ message: 'El nombre debe ser texto.' })
   @IsNotEmpty({ message: 'El nombre es obligatorio.' })

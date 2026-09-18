@@ -1,0 +1,16 @@
+/* Estilos del resumen del recorrido por calles. */
+
+.roadRouteSummary {
+  margin: var(--espacio-sm) 0 0;
+  font-size: var(--tamaño-sm);
+  color: var(--color-texto);
+}
+
+.fallback {
+  color: var(--color-texto-suave);
+}
+
+.source {
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-xs);
+}

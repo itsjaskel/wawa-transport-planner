@@ -54,6 +54,23 @@
   text-align: right;
 }
 
+.actionsCell > button + button {
+  margin-left: var(--espacio-xs);
+}
+
+.editCard {
+  margin-bottom: var(--espacio-md);
+  padding: var(--espacio-md);
+  border: 2px solid var(--color-primario);
+  border-radius: var(--radio-md);
+  background-color: var(--color-superficie);
+}
+
+.editTitle {
+  font-size: var(--tamaño-md);
+  margin-bottom: var(--espacio-sm);
+}
+
 .deleteError {
   margin: 0 0 var(--espacio-sm);
   color: var(--color-error);

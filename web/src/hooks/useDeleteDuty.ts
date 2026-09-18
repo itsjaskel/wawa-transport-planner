@@ -11,6 +11,8 @@ export function useDeleteDuty(routeId: string) {
     mutationFn: (dutyId: string) => requestApi<void>(`/duties/${dutyId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.routeDuties(routeId) });
+      // Asignar o borrar un duty cambia qué unidades están libres.
+      queryClient.invalidateQueries({ queryKey: queryKeys.unitAvailabilityRoot });
     },
   });
 }

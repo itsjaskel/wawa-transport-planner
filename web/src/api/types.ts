@@ -75,9 +75,34 @@ export interface RouteDuty extends Duty {
   unit: Pick<Unit, 'id' | 'code' | 'name'>;
 }
 
+/** Duty que ocupa a una unidad en la ventana consultada. */
+export interface OccupyingDuty {
+  id: string;
+  routeId: string;
+  routeName: string;
+  startAt: string;
+  endAt: string;
+}
+
+/** Si una unidad está libre en una ventana; si está ocupada, qué duty la ocupa. */
+export interface UnitAvailability {
+  unitId: string;
+  code: string;
+  name: string;
+  isAvailable: boolean;
+  occupyingDuty?: OccupyingDuty;
+}
+
 /** Datos para asignar un duty; las fechas deben llevar zona horaria. */
 export interface CreateDutyInput {
   routeId: string;
+  unitId: string;
+  startAt: string;
+  endAt: string;
+}
+
+/** Datos para editar un duty: nueva unidad y nueva ventana. La ruta no cambia. */
+export interface UpdateDutyInput {
   unitId: string;
   startAt: string;
   endAt: string;

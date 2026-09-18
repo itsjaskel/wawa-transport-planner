@@ -1,9 +1,11 @@
-// Configuración global de la aplicación Nest: prefijo, seguridad, CORS, validación y errores.
+// Configuración global de la aplicación Nest: prefijo, seguridad, CORS, validación, errores y
+// documentación.
 // La comparten `main.ts` y los tests de integración, para que los tests prueben la api tal cual corre.
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { setupApiDocumentation } from './common/documentation/api-documentation.js';
 import { createValidationException } from './common/errors/validation-errors.js';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter.js';
 
@@ -35,4 +37,5 @@ export function configureApp(app: NestExpressApplication): void {
     }),
   );
   app.useGlobalFilters(new ApiExceptionFilter());
+  setupApiDocumentation(app);
 }

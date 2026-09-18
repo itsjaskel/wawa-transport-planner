@@ -1,20 +1,32 @@
-// Formulario para asignar un duty a la ruta actual: unidad, inicio y fin en la hora local.
+// Formulario de duty para la ruta actual: asigna uno nuevo o edita uno existente (unidad y ventana).
+// Al elegir el horario muestra qué unidades están libres; la garantía la da la api al guardar.
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError } from '../api/client';
-import type { Unit } from '../api/types';
-import { useCreateDuty } from '../hooks/useCreateDuty';
+import type { RouteDuty, Unit } from '../api/types';
+import { useSaveDuty } from '../hooks/useSaveDuty';
+import { useUnitAvailability, type AvailabilityWindow } from '../hooks/useUnitAvailability';
 import { useUnits } from '../hooks/useUnits';
 import styles from '../styles/DutyForm.module.css';
-import { convertLocalInputToIso, formatUtcOffset, isValidLocalInput } from '../utils/dateTime';
+import {
+  convertIsoToLocalInput,
+  convertLocalInputToIso,
+  formatUtcOffset,
+  isValidLocalInput,
+} from '../utils/dateTime';
 import { groupFieldMessages, hasFieldMessages, type FieldMessages } from '../utils/invalidFields';
 import { Button } from './Button';
 import { DutyConflictWarning } from './DutyConflictWarning';
 import { FieldErrors } from './FieldErrors';
+import { UnitAvailabilitySelect } from './UnitAvailabilitySelect';
 
 interface DutyFormProps {
   routeId: string;
-  onDutyCreated: (successMessage: string) => void;
+  /** Si se indica, el formulario edita este duty en lugar de asignar uno nuevo. */
+  dutyToEdit?: RouteDuty;
+  onDutySaved: (successMessage: string) => void;
+  /** Solo al editar: cierra el formulario sin guardar. */
+  onCancel?: () => void;
 }
 
 /** Valores del formulario tal como los escribe el usuario. */
@@ -25,6 +37,35 @@ interface DutyFormValues {
 }
 
 const EMPTY_FORM_VALUES: DutyFormValues = { unitId: '', startLocal: '', endLocal: '' };
+
+/** Valores iniciales: vacíos al asignar, los del duty (en hora local) al editar. */
+function buildInitialValues(dutyToEdit: RouteDuty | undefined): DutyFormValues {
+  if (!dutyToEdit) {
+    return EMPTY_FORM_VALUES;
+  }
+  return {
+    unitId: dutyToEdit.unitId,
+    startLocal: convertIsoToLocalInput(dutyToEdit.startAt),
+    endLocal: convertIsoToLocalInput(dutyToEdit.endAt),
+  };
+}
+
+/** Devuelve la ventana en ISO si inicio y fin son válidos y el fin es posterior; si no, null. */
+function buildAvailabilityWindow(formValues: DutyFormValues): AvailabilityWindow | null {
+  const hasValidDates =
+    isValidLocalInput(formValues.startLocal) && isValidLocalInput(formValues.endLocal);
+  if (!hasValidDates) {
+    return null;
+  }
+  const endsAfterStart = new Date(formValues.endLocal) > new Date(formValues.startLocal);
+  if (!endsAfterStart) {
+    return null;
+  }
+  return {
+    startAt: convertLocalInputToIso(formValues.startLocal),
+    endAt: convertLocalInputToIso(formValues.endLocal),
+  };
+}
 
 /** Revisa lo obvio antes de enviar, para no hacer esperar al usuario por un error evidente. */
 function validateDutyForm(formValues: DutyFormValues): FieldMessages {
@@ -61,7 +102,7 @@ function readGeneralErrorMessage(error: unknown): string | null {
   if (error instanceof Error) {
     return error.message;
   }
-  return 'No se pudo asignar el duty.';
+  return 'No se pudo guardar el duty.';
 }
 
 /** Busca el código de una unidad para el mensaje de éxito. */
@@ -70,18 +111,25 @@ function findUnitCode(units: Unit[] | undefined, unitId: string): string {
   return selectedUnit?.code ?? 'la unidad';
 }
 
-/** Asigna un duty a la ruta; muestra los errores junto a cada campo y el conflicto de horario con su detalle. */
-export function DutyForm({ routeId, onDutyCreated }: DutyFormProps) {
-  const [formValues, setFormValues] = useState<DutyFormValues>(EMPTY_FORM_VALUES);
+/** Asigna o edita un duty; muestra la disponibilidad, los errores por campo y el conflicto de horario. */
+export function DutyForm({ routeId, dutyToEdit, onDutySaved, onCancel }: DutyFormProps) {
+  const isEditing = dutyToEdit !== undefined;
+  const fieldIdPrefix = isEditing ? `duty-edit-${dutyToEdit.id}` : 'duty';
+  const [formValues, setFormValues] = useState<DutyFormValues>(() =>
+    buildInitialValues(dutyToEdit),
+  );
   const [clientFieldMessages, setClientFieldMessages] = useState<FieldMessages>({});
   const { data: units, isPending: isLoadingUnits, isError: hasUnitsError } = useUnits();
-  const createDuty = useCreateDuty();
+  const saveDuty = useSaveDuty(dutyToEdit?.id);
 
-  const serverFieldMessages = groupFieldMessages(createDuty.error);
-  const fieldMessages = { ...serverFieldMessages, ...clientFieldMessages };
+  const availabilityWindow = buildAvailabilityWindow(formValues);
+  // Al editar, el propio duty no debe hacer que su unidad aparezca ocupada.
+  const unitAvailability = useUnitAvailability(availabilityWindow, dutyToEdit?.id);
+
+  const fieldMessages = { ...groupFieldMessages(saveDuty.error), ...clientFieldMessages };
   const conflictingDuty =
-    createDuty.error instanceof ApiError ? createDuty.error.readConflictingDuty() : null;
-  const generalErrorMessage = readGeneralErrorMessage(createDuty.error);
+    saveDuty.error instanceof ApiError ? saveDuty.error.readConflictingDuty() : null;
+  const generalErrorMessage = readGeneralErrorMessage(saveDuty.error);
 
   // El desfase se calcula para la fecha elegida: con horario de verano puede cambiar según el día.
   let offsetReferenceDate = new Date();
@@ -94,10 +142,10 @@ export function DutyForm({ routeId, onDutyCreated }: DutyFormProps) {
   function updateField(fieldName: keyof DutyFormValues, value: string) {
     setFormValues((previousValues) => ({ ...previousValues, [fieldName]: value }));
     setClientFieldMessages({});
-    createDuty.reset();
+    saveDuty.reset();
   }
 
-  /** Valida y envía el duty; al terminar bien, limpia las fechas y avisa a la pantalla. */
+  /** Valida y guarda el duty; al terminar bien avisa a la pantalla y, al asignar, limpia las fechas. */
   function submitDuty(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
     const validationMessages = validateDutyForm(formValues);
@@ -112,11 +160,16 @@ export function DutyForm({ routeId, onDutyCreated }: DutyFormProps) {
       startAt: convertLocalInputToIso(formValues.startLocal),
       endAt: convertLocalInputToIso(formValues.endLocal),
     };
-    createDuty.mutate(dutyInput, {
+    saveDuty.mutate(dutyInput, {
       onSuccess: () => {
         const unitCode = findUnitCode(units, formValues.unitId);
+        if (isEditing) {
+          onDutySaved(`Duty de ${unitCode} actualizado.`);
+          return;
+        }
+        // Se conserva la unidad para poder asignarle varios duties seguidos.
         setFormValues({ ...EMPTY_FORM_VALUES, unitId: formValues.unitId });
-        onDutyCreated(`Duty asignado a ${unitCode}.`);
+        onDutySaved(`Duty asignado a ${unitCode}.`);
       },
     });
   }
@@ -135,56 +188,54 @@ export function DutyForm({ routeId, onDutyCreated }: DutyFormProps) {
     );
   }
 
+  let submitLabel = isEditing ? 'Guardar cambios' : 'Asignar duty';
+  if (saveDuty.isPending) {
+    submitLabel = 'Guardando…';
+  }
+
   return (
     <form className={styles.dutyForm} onSubmit={submitDuty} noValidate>
       <p className={styles.formHint}>Horas en tu zona horaria ({localOffsetLabel}).</p>
 
+      {/* Primero el horario: con él se sabe qué unidades están libres. */}
       <div className={styles.fields}>
         <div className={styles.field}>
-          <label htmlFor="duty-unit">Unidad</label>
-          <select
-            id="duty-unit"
-            value={formValues.unitId}
-            onChange={(changeEvent) => updateField('unitId', changeEvent.target.value)}
-            disabled={isLoadingUnits}
-            aria-invalid={fieldMessages.unitId !== undefined}
-            aria-describedby="duty-unit-errors"
-          >
-            <option value="">{isLoadingUnits ? 'Cargando unidades…' : 'Elige una unidad'}</option>
-            {units?.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.code} · {unit.name}
-              </option>
-            ))}
-          </select>
-          <FieldErrors id="duty-unit-errors" messages={fieldMessages.unitId} />
-        </div>
-
-        <div className={styles.field}>
-          <label htmlFor="duty-start">Inicio</label>
+          <label htmlFor={`${fieldIdPrefix}-start`}>Inicio</label>
           <input
-            id="duty-start"
+            id={`${fieldIdPrefix}-start`}
             type="datetime-local"
             value={formValues.startLocal}
             onChange={(changeEvent) => updateField('startLocal', changeEvent.target.value)}
             aria-invalid={fieldMessages.startAt !== undefined}
-            aria-describedby="duty-start-errors"
+            aria-describedby={`${fieldIdPrefix}-start-errors`}
           />
-          <FieldErrors id="duty-start-errors" messages={fieldMessages.startAt} />
+          <FieldErrors id={`${fieldIdPrefix}-start-errors`} messages={fieldMessages.startAt} />
         </div>
 
         <div className={styles.field}>
-          <label htmlFor="duty-end">Fin</label>
+          <label htmlFor={`${fieldIdPrefix}-end`}>Fin</label>
           <input
-            id="duty-end"
+            id={`${fieldIdPrefix}-end`}
             type="datetime-local"
             value={formValues.endLocal}
             onChange={(changeEvent) => updateField('endLocal', changeEvent.target.value)}
             aria-invalid={fieldMessages.endAt !== undefined}
-            aria-describedby="duty-end-errors"
+            aria-describedby={`${fieldIdPrefix}-end-errors`}
           />
-          <FieldErrors id="duty-end-errors" messages={fieldMessages.endAt} />
+          <FieldErrors id={`${fieldIdPrefix}-end-errors`} messages={fieldMessages.endAt} />
         </div>
+
+        <UnitAvailabilitySelect
+          fieldId={`${fieldIdPrefix}-unit`}
+          units={units}
+          isLoadingUnits={isLoadingUnits}
+          availability={unitAvailability.data}
+          isCheckingAvailability={unitAvailability.isFetching}
+          hasWindow={availabilityWindow !== null}
+          selectedUnitId={formValues.unitId}
+          errorMessages={fieldMessages.unitId}
+          onSelectUnit={(unitId) => updateField('unitId', unitId)}
+        />
       </div>
 
       {conflictingDuty && (
@@ -193,9 +244,14 @@ export function DutyForm({ routeId, onDutyCreated }: DutyFormProps) {
       {generalErrorMessage && <p className={styles.formError}>{generalErrorMessage}</p>}
 
       <div className={styles.actions}>
-        <Button type="submit" disabled={createDuty.isPending}>
-          {createDuty.isPending ? 'Asignando…' : 'Asignar duty'}
+        <Button type="submit" disabled={saveDuty.isPending}>
+          {submitLabel}
         </Button>
+        {onCancel && (
+          <Button variant="secondary" onClick={onCancel} disabled={saveDuty.isPending}>
+            Cancelar
+          </Button>
+        )}
       </div>
     </form>
   );

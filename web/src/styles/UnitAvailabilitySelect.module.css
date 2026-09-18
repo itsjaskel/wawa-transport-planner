@@ -1,0 +1,18 @@
+/* Estilos del selector de unidad con disponibilidad. */
+
+.unitAvailabilitySelect {
+  min-width: 0;
+}
+
+.helpText {
+  margin: var(--espacio-xs) 0 0;
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-xs);
+}
+
+.occupiedWarning {
+  margin: var(--espacio-xs) 0 0;
+  color: var(--color-aviso);
+  font-size: var(--tamaño-sm);
+  font-weight: var(--peso-medio);
+}

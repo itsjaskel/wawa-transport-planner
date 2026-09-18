@@ -46,6 +46,7 @@ conflicto de peer dependencies. `[verificado-en-dispositivo]`
 |---|---|
 | `@nestjs/common`, `core`, `platform-express`, `testing`, `cli`, `schematics` | `^12.0.3` |
 | `@nestjs/mongoose` | `^12.0.0` |
+| `@nestjs/swagger` | `^12.0.1` (Fase 4, autorizada por el responsable) |
 | `@nestjs/config` | `^12.0.0` |
 | `mongoose` | `^9.10.1` |
 | `class-validator` / `class-transformer` | `^0.15.1` / `^0.5.1` |
@@ -216,6 +217,26 @@ relajar la desconfianza justo donde hace falta. Media defensa es peor que ningun
   caso una creación simultánea todavía ve el duty que se borra y responde 409 de más, que es el
   error seguro.
 
+### Editar un duty con la misma garantía
+
+`DutiesService.updateDuty` (`PUT /duties/:id`, cambia unidad y ventana; la ruta no): transacción con
+`lockUnitSchedule` sobre la **unidad de destino** (la de origen solo pierde un duty, no puede quedar
+con un solapamiento), el duty existe (404), búsqueda de solapamientos **excluyendo el propio duty**
+(`_id: { $ne }`), y se guarda con `duty.save({ session })`. **No con `updateOne`:** el validador del
+esquema `endAt > startAt` usa `this` como documento y en una actualización por consulta no lo tiene.
+
+**Verificado** `[verificado-en-dispositivo]`: 10 duties distintos movidos a la vez a la misma ventana
+de la misma unidad → exactamente 1 con 200. **Contraprueba** (el `$inc` sustituido por un `findById`
+con sesión, solo en la edición): tres ejecuciones, las tres `{ 200: 3, 409: 7 }`. Restaurado
+(comprobado byte a byte), vuelve a pasar.
+
+### Vista previa de disponibilidad: ayuda, no garantía
+
+`GET /units/availability?startAt&endAt[&excludeDutyId]` usa **el mismo `buildOverlapFilter`** que la
+asignación, sin transacción. Una unidad libre puede ocuparse un instante después: la garantía sigue
+siendo el 409 al guardar. `excludeDutyId` sirve al editar, para que el propio duty no marque su
+unidad como ocupada. Probada con la misma tabla de 9 casos. `[verificado-en-dispositivo]`
+
 ### Borrar una unidad sin dejar duties huérfanos
 
 Regla: **una unidad solo se borra si no tiene duties** (409 `UnitInUse` con las rutas donde están).
@@ -300,7 +321,7 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 
 ```bash
 docker compose exec api npm test                   # unitarios (33 tests)
-docker compose exec api npm run test:e2e           # integración contra MongoDB real (31 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (50 tests)
 docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
 
@@ -477,6 +498,26 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
 - **Prettier:** `npx prettier --check --end-of-line auto "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"`.
   El `--end-of-line auto` es necesario en esta máquina (ver error 11).
 
+### Documentación Swagger
+
+- En `/api/docs` (JSON en `/api/docs-json`), montada en `configureApp`: los tests ven lo mismo que
+  producción. `[verificado-en-dispositivo]` (la página carga con `helmet` activo).
+- **Anotaciones explícitas**, no el plugin del CLI: `@ApiProperty` en los dtos de entrada (límites
+  tomados de las mismas constantes que la validación), clases `*Response` solo de documentación para
+  las salidas, y `@ApiErrorResponses(...)` (`common/documentation/api-documentation.ts`) para las
+  respuestas de error con el formato uniforme.
+- **Etiquetas explícitas y `autoTagControllers: false`.** Por defecto Swagger añade además una
+  etiqueta con el nombre del controlador, y el de duties sirve también `DELETE /units/:id`: salían
+  etiquetas duplicadas y mezcladas. `[verificado-contra-la-librería]`
+- `test/documentation.e2e-spec.ts` falla si un endpoint público no aparece en la documentación: al
+  añadir uno, hay que añadirlo también a su lista.
+- `swagger-ui-dist` depende de `@scarf/scarf` (telemetría). npm 11 bloquea su script de instalación
+  por defecto y **así se deja**. `[verificado-en-dispositivo]`
+- **Trampa al añadir una dependencia:** `node_modules` vive en un volumen anónimo del contenedor, que
+  `docker compose up --build` **reutiliza**. Instalar con `docker compose exec api npm install …`
+  actualiza el volumen y el lockfile a la vez; si se instala solo en el host, hay que recrear con
+  `docker compose up --build -V`. `[supuesto]` para el segundo caso: no se ha probado.
+
 ### Convenciones del frontend
 
 - **Enrutador:** React Router 8.4 con `createBrowserRouter` (de `react-router`) y `RouterProvider`
@@ -507,6 +548,15 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   atributo SVG, donde una variable CSS no es fiable: el color va en la clase `route-line` de
   `leaflet-overrides.css`. `MARKER_SIZE_PX` (en `config/map.ts`) debe coincidir con
   `--tamaño-marcador`.
+- **Trazado por calles (OSRM):** lo pide el navegador (`web/src/api/roadRouting.ts`) al servidor
+  público `router.project-osrm.org`, que responde con `Access-Control-Allow-Origin: *`
+  `[verificado-en-dispositivo]`. OSRM usa el orden **[lng, lat]**: se invierte al leer y al escribir.
+  Solo en el detalle de ruta (`useRoadRoute`, sin reintentos y con caché por coordenadas), no en el
+  editor. Tiempo máximo 8 s; si falla, la línea vuelve a ser recta y `RoadRouteSummary` lo explica.
+  Verificado bloqueando el dominio en el navegador: la pantalla sigue funcionando.
+  `[verificado-en-dispositivo]`
+- **TanStack Query v5:** una consulta deshabilitada se queda en `isPending` para siempre. Para mostrar
+  "cargando" se usa `isLoading` (pendiente **y** pidiendo). `[verificado-contra-la-librería]`
 - **Contenedores con desplazamiento horizontal** (`overflow-x: auto`): llevan `position: relative`
   si dentro hay algo posicionado en absoluto. Ver error 12.
 - **Rejillas: siempre `minmax(0, Nfr)`, nunca `Nfr` a secas.** `1fr` no baja del ancho mínimo del
@@ -549,6 +599,10 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Sondeo del observador de archivos de la api | `api/tsconfig.json` (`watchOptions`) |
 | Punto de entrada de la api | `api/src/main.ts` |
 | Configuración global de la app (compartida con los tests) | `api/src/app.setup.ts` |
+| Montaje de Swagger y atajo de respuestas de error | `api/src/common/documentation/api-documentation.ts` |
+| Esquema de error para la documentación | `api/src/common/errors/api-error-response.dto.ts` |
+| Esquemas de respuesta para la documentación | `api/src/*/dto/*-response.dto.ts` |
+| Test de cobertura de la documentación | `api/test/documentation.e2e-spec.ts` |
 | Módulo raíz, conexión a MongoDB | `api/src/app.module.ts` |
 | Validación de variables de entorno al arrancar | `api/src/config/env.validation.ts` |
 | Endpoint de salud y comprobación del replica set | `api/src/health/health.controller.ts` |
@@ -568,7 +622,11 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Regla de solapamiento (función pura y filtro de Mongo) | `api/src/duties/domain/overlap.ts` |
 | Tabla de 9 casos de solapamiento, compartida por los tests | `api/src/duties/domain/overlap-cases.ts` |
 | Esquema del duty, validación de ventana, índices, virtual `unit` | `api/src/duties/schemas/duty.schema.ts` |
-| Validación de la creación de duty (fechas con zona) | `api/src/duties/dto/create-duty.dto.ts` |
+| Validación de la ventana (zona obligatoria, fin posterior), compartida | `api/src/duties/dto/time-window.dto.ts` |
+| Validación de la creación de duty | `api/src/duties/dto/create-duty.dto.ts` |
+| Validación de la edición de duty (unidad y ventana) | `api/src/duties/dto/update-duty.dto.ts` |
+| Parámetros de la consulta de disponibilidad | `api/src/duties/dto/unit-availability-query.dto.ts` |
+| Disponibilidad y edición de duties (servicio) | `api/src/duties/duties.service.ts` (`findUnitAvailability`, `updateDuty`) |
 | Transacción, bloqueo de la unidad (`$inc`), 409 y 503 | `api/src/duties/duties.service.ts` |
 | Endpoints de duties, incluido `GET /routes/:id/duties` | `api/src/duties/duties.controller.ts` |
 | Tests de integración y de concurrencia de duties | `api/test/duties.e2e-spec.ts` |
@@ -583,7 +641,7 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Cliente HTTP único y `ApiError` | `web/src/api/client.ts` |
 | Tipos del dominio en el frontend | `web/src/api/types.ts` |
 | Claves de TanStack Query | `web/src/hooks/queryKeys.ts` |
-| Hooks de lectura y escritura | `web/src/hooks/use*.ts` (`useRoutes`, `useRoute`, `useSaveRoute`, `useUnits`, `useCreateUnit`, `useUpdateUnit`, `useDeleteUnit`, `useRouteDuties`, `useCreateDuty`, `useDeleteDuty`, `useApiHealth`) |
+| Hooks de lectura y escritura | `web/src/hooks/use*.ts` (`useRoutes`, `useRoute`, `useSaveRoute`, `useUnits`, `useCreateUnit`, `useUpdateUnit`, `useDeleteUnit`, `useUnitAvailability`, `useSaveDuty`, `useRouteDuties`, `useCreateDuty`, `useDeleteDuty`, `useApiHealth`) |
 | Fechas: formato local con desfase UTC, conversión del formulario | `web/src/utils/dateTime.ts` |
 | Errores de validación agrupados por campo | `web/src/utils/invalidFields.ts` |
 | Borradores de puntos del editor de rutas | `web/src/utils/routePointDrafts.ts` |
@@ -594,9 +652,14 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Pantalla: unidades | `web/src/pages/UnitsPage.tsx` |
 | Pantalla: dirección inexistente | `web/src/pages/NotFoundPage.tsx` |
 | Mapa de una ruta (lectura y editor) | `web/src/components/RouteMap.tsx` |
+| Cliente del trazado por calles (OSRM) | `web/src/api/roadRouting.ts` |
+| Hook del trazado por calles | `web/src/hooks/useRoadRoute.ts` |
+| Resumen de distancia y tiempo bajo el mapa | `web/src/components/RoadRouteSummary.tsx` |
+| Formato de distancias y tiempos de viaje | `web/src/utils/measurements.ts` |
 | Lista editable de puntos | `web/src/components/RoutePointsEditor.tsx` |
 | Lista de puntos de solo lectura | `web/src/components/RoutePointList.tsx` |
-| Formulario de duty | `web/src/components/DutyForm.tsx` |
+| Formulario de duty (asignar y editar) | `web/src/components/DutyForm.tsx` |
+| Selector de unidad con disponibilidad | `web/src/components/UnitAvailabilitySelect.tsx` |
 | Aviso de conflicto de horario (409) | `web/src/components/DutyConflictWarning.tsx` |
 | Tabla de duties con borrado | `web/src/components/DutyList.tsx` |
 | Tabla de unidades con edición del nombre y borrado | `web/src/components/UnitsTable.tsx` |
@@ -830,14 +893,16 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   repositorio a una ruta sin `@`. `[verificado-en-dispositivo]` en esta máquina.
 - **`app.useBodyParser('json', { limit })`** rechaza un cuerpo de ~300 kb con `413 PayloadTooLarge`.
   `[verificado-en-dispositivo]`
-- **El endpoint de disponibilidad de unidades** que necesitaría la vista previa de conflictos de la
-  Fase 4 **no está en el contrato de la api** y está pendiente de decisión.
 - **Mensajes redundantes en un campo con el tipo equivocado:** si `code` llega como número o lista, se
   devuelven a la vez los cuatro mensajes del campo ("debe ser texto", "es obligatorio"…). Es correcto,
   pero ruidoso; se podría cortar en el primer fallo con `stopAtFirstError`. No se ha cambiado.
   `[verificado-en-dispositivo]`
 - **`overlap-cases.ts` es dato de test dentro de `src/`** y por tanto se compila en `dist/`. Está ahí
   porque lo comparten el test unitario (en `src/`) y el de integración (en `test/`). Inofensivo.
+- **El trazado por calles depende del servidor público de demostración de OSRM**, sin garantías de
+  disponibilidad ni de límites de uso, y que recibe las coordenadas de las rutas. El núcleo no depende
+  de él (vuelve a la línea recta). Para producción: servidor OSRM propio o proveedor con contrato.
+  `[supuesto]` sobre sus límites: no están documentados como garantía.
 - **Duties de una ruta sin paginación.** `GET /routes/:id/duties` devuelve todos. Suficiente para el
   MVP. `[supuesto]`
 - **Lecturas de duties solo por ruta.** `GET /routes/:id/duties` es la única lectura prevista; no hay
@@ -847,7 +912,7 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 
 ## 10. Contrato de la api
 
-Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
+Prefijo global `/api`. Swagger en `/api/docs` y `/api/docs-json`. `[verificado-en-dispositivo]`
 
 | Método | Ruta | Respuestas | Estado |
 |---|---|---|---|
@@ -861,6 +926,8 @@ Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
 | PATCH | `/units/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` (solo `name`) |
 | DELETE | `/units/:id` | 204, 400, 404, **409** | **Hecho** `[verificado-en-dispositivo]` (solo sin duties) |
 | POST | `/units` | 201, 400, 409 | **Hecho** `[verificado-en-dispositivo]` |
+| GET | `/units/availability` | 200, 400 | **Hecho** `[verificado-en-dispositivo]` (ayuda, no garantía) |
+| PUT | `/duties/:id` | 200, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
 | POST | `/duties` | 201, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
 | DELETE | `/duties/:id` | 204, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 
@@ -911,5 +978,5 @@ con duties; `details = { dutyCount, routes: [{ id, name, dutyCount }] }`), `Payl
 | 1 | Rutas y unidades, filtro de errores, seed | **Terminada** y verificada en Docker |
 | 2 | Duties, regla de solapamiento, concurrencia | **Terminada** y verificada en Docker, con contraprueba |
 | 3 | Frontend completo | **Terminada** y verificada en tres anchos, con los flujos recorridos |
-| 4 | Swagger, vista previa de conflictos, edición de duty | Opcional |
+| 4 | Swagger, vista previa de disponibilidad, edición de duty, trazado por calles | **Terminada**, con contraprueba de la edición |
 | 5 | Cierre y revisión | Pendiente |

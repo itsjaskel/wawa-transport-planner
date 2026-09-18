@@ -16,7 +16,7 @@ export function DutyConflictWarning({ conflictingDuty, currentRouteId }: DutyCon
 
   return (
     <div className={styles.dutyConflictWarning} role="alert">
-      <p className={styles.title}>No se pudo asignar: la unidad está ocupada.</p>
+      <p className={styles.title}>No se pudo guardar: la unidad está ocupada en ese horario.</p>
       <p className={styles.detail}>
         La unidad <strong>{conflictingDuty.unitCode}</strong> ya tiene un duty el {conflictWindow}{' '}
         {isOnCurrentRoute ? (

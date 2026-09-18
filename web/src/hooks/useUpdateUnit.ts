@@ -13,6 +13,8 @@ export function useUpdateUnit() {
       sendApiJson<Unit>('PATCH', `/units/${unitInput.unitId}`, { name: unitInput.name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.units });
+      // La disponibilidad lista todas las unidades: también queda desactualizada.
+      queryClient.invalidateQueries({ queryKey: queryKeys.unitAvailabilityRoot });
       // Los duties de cada ruta muestran el nombre de su unidad: también quedan desactualizados.
       queryClient.invalidateQueries({ queryKey: queryKeys.routes });
     },

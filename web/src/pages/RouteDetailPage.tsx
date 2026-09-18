@@ -6,10 +6,12 @@ import type { Route } from '../api/types';
 import { ButtonLink } from '../components/Button';
 import { DutyForm } from '../components/DutyForm';
 import { DutyList } from '../components/DutyList';
+import { RoadRouteSummary } from '../components/RoadRouteSummary';
 import { RouteMap } from '../components/RouteMap';
 import { RoutePointList } from '../components/RoutePointList';
 import { StatusMessage } from '../components/StatusMessage';
 import { SuccessNotice } from '../components/SuccessNotice';
+import { useRoadRoute } from '../hooks/useRoadRoute';
 import { useRoute } from '../hooks/useRoute';
 import { useRouteDuties } from '../hooks/useRouteDuties';
 import styles from '../styles/RouteDetailPage.module.css';
@@ -24,10 +26,10 @@ interface RouteDetailLocationState {
 /** Duties de la ruta según el estado de la consulta: cargando, error, vacío o la tabla. */
 function RouteDutiesSection({
   routeId,
-  onDutyDeleted,
+  onDutyChanged,
 }: {
   routeId: string;
-  onDutyDeleted: (successMessage: string) => void;
+  onDutyChanged: (successMessage: string) => void;
 }) {
   const { data: duties, isPending, isError, error } = useRouteDuties(routeId);
 
@@ -48,7 +50,7 @@ function RouteDutiesSection({
       </StatusMessage>
     );
   }
-  return <DutyList routeId={routeId} duties={duties} onDutyDeleted={onDutyDeleted} />;
+  return <DutyList routeId={routeId} duties={duties} onDutyChanged={onDutyChanged} />;
 }
 
 /** Contenido de la ruta ya cargada: cabecera, mapa, puntos y duties. */
@@ -61,6 +63,7 @@ function RouteDetail({
 }) {
   const [successMessage, setSuccessMessage] = useState<string | null>(initialSuccessMessage);
   const dismissSuccessMessage = useCallback(() => setSuccessMessage(null), []);
+  const roadRoute = useRoadRoute(route.points);
 
   return (
     <>
@@ -80,7 +83,12 @@ function RouteDetail({
 
       <div className={styles.mapLayout}>
         <div className={styles.mapColumn}>
-          <RouteMap points={route.points} />
+          <RouteMap points={route.points} roadPositions={roadRoute.data?.positions} />
+          <RoadRouteSummary
+            roadRoute={roadRoute.data}
+            isCalculating={roadRoute.isLoading}
+            hasFailed={roadRoute.isError}
+          />
         </div>
         <section className={styles.pointsColumn} aria-labelledby="route-points-title">
           <h2 id="route-points-title" className={styles.sectionTitle}>
@@ -96,9 +104,9 @@ function RouteDetail({
         </h2>
         <div className={styles.dutyFormCard}>
           <h3 className={styles.cardTitle}>Asignar un duty</h3>
-          <DutyForm routeId={route.id} onDutyCreated={setSuccessMessage} />
+          <DutyForm routeId={route.id} onDutySaved={setSuccessMessage} />
         </div>
-        <RouteDutiesSection routeId={route.id} onDutyDeleted={setSuccessMessage} />
+        <RouteDutiesSection routeId={route.id} onDutyChanged={setSuccessMessage} />
       </section>
     </>
   );
