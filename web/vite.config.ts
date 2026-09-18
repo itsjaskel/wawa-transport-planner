@@ -12,7 +12,7 @@ export default defineConfig({
     host: ALL_NETWORK_INTERFACES,
     port: DEV_SERVER_PORT,
     watch: {
-      // Los eventos del sistema de archivos no cruzan el limite entre Windows o macOS
+      // Los eventos del sistema de archivos no cruzan el límite entre Windows o macOS
       // y el contenedor Linux: sin sondeo periódico la recarga en caliente no llega.
       usePolling: true,
       interval: 300,

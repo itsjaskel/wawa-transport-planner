@@ -1,0 +1,24 @@
+/* Estilos del aviso de conflicto al asignar un duty. */
+
+.dutyConflictWarning {
+  padding: var(--espacio-md);
+  border-left: 4px solid var(--color-aviso);
+  border-radius: var(--radio-sm);
+  background-color: var(--color-fondo-aviso);
+}
+
+.title {
+  margin: 0 0 var(--espacio-xs);
+  font-weight: var(--peso-fuerte);
+  color: var(--color-aviso);
+}
+
+.detail {
+  margin: 0;
+}
+
+.hint {
+  margin: var(--espacio-xs) 0 0;
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}

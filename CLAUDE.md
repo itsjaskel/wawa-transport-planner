@@ -122,9 +122,11 @@ con `error TS5011`. Por eso `api/tsconfig.build.json` lo declara explícitamente
     todo comando que aparezca en él se ejecuta antes de escribirlo.
   - El tono del README es **ligeramente coloquial** (decisión del responsable): cercano, pero sin
     perder precisión.
-  - En `DECISIONS.md` solo se registra lo que se puede atribuir con pruebas: el documento de
-    requisitos del responsable, este archivo y lo decidido en conversación. No se inventan
-    correcciones ni rechazos.
+  - **Ambos se escriben en primera persona**, con la voz del responsable (decisión del
+    responsable). Las instrucciones de uso del README pueden dirigirse al lector ("abre…").
+  - En `DECISIONS.md` no se inventan correcciones ni rechazos que no ocurrieron. Por decisión del
+    responsable, **las decisiones que el agente propone y el responsable aprueba se registran como
+    suyas** (así se hizo con las de la interfaz en la Fase 3), y solo las más importantes.
   - El responsable revisa ambos antes de entregarlos: los va a defender en la entrevista.
 - **Los scripts auxiliares se ejecutan en TypeScript sin compilar.** Node 24 ejecuta archivos `.ts`
   de forma nativa, sin flags. Limitación: el borrado de tipos no admite `enum`, `namespace` ni
@@ -448,6 +450,39 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
 - **Prettier:** `npx prettier --check --end-of-line auto "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"`.
   El `--end-of-line auto` es necesario en esta máquina (ver error 11).
 
+### Convenciones del frontend
+
+- **Enrutador:** React Router 8.4 con `createBrowserRouter` (de `react-router`) y `RouterProvider`
+  **de `react-router/dom`**, que es la variante para el navegador. Mapa de pantallas en
+  `web/src/router.tsx`. `[verificado-contra-la-librería]`
+- **Errores de la api:** `ApiError` guarda `statusCode`, `errorType` y `details`, y ofrece
+  `readInvalidFields()` y `readConflictingDuty()`. Los errores por campo se muestran junto a cada
+  campo con `groupFieldMessages` (`utils/invalidFields.ts`), usando la misma ruta que la api
+  (`points.3.lat`). `requestApi` devuelve `undefined` ante un `204` en lugar de leer JSON.
+- **TanStack Query:** claves en `hooks/queryKeys.ts`; cada mutación invalida exactamente lo que
+  afecta. Las lecturas **no se reintentan ante un 4xx** (`shouldRetryQuery` en `main.tsx`).
+- **Fechas:** todo pasa por `utils/dateTime.ts`. Se muestran en la zona del navegador **siempre con
+  su desfase UTC** (`UTC−04:00`), calculado para cada fecha. El valor de un
+  `<input type="datetime-local">` se envía con `convertLocalInputToIso`, que añade el desfase local.
+  Locale de formato: `es-MX`. `[verificado-en-dispositivo]` (máquina en UTC−04:00: un duty guardado
+  de 08:00 a 12:00 UTC se muestra de 04:00 a 08:00 con su `UTC−04:00`).
+- **Edición de puntos:** borradores con las coordenadas en texto (`utils/routePointDrafts.ts`). Un
+  campo vacío se envía como `NaN` (llega a la api como `null` y lo rechaza), **nunca como 0**, que
+  mandaría el punto a la latitud 0. Ids de fila con un contador, no `crypto.randomUUID` (solo existe
+  en contextos seguros).
+- **Componentes compartidos:** `Button`/`ButtonLink`, `StatusMessage` (carga, vacío, error),
+  `SuccessNotice`, `FieldErrors`, `ConfirmDialog` (`<dialog>` nativo). Cada uno con su módulo CSS.
+- **Campos de formulario** (`input`, `select`, `label`) con estilo global en `base.css`, porque son
+  iguales en todas las pantallas. La disposición de cada formulario va en el módulo de su pantalla.
+- **Mapa:** un solo componente, `RouteMap`; si recibe `onAddPoint` es editable. En el detalle
+  reencuadra cuando cambian los puntos; en el editor solo la primera vez, y **nunca** en una ruta
+  nueva (si no, el primer clic haría saltar el zoom). Leaflet escribe el color de la línea como
+  atributo SVG, donde una variable CSS no es fiable: el color va en la clase `route-line` de
+  `leaflet-overrides.css`. `MARKER_SIZE_PX` (en `config/map.ts`) debe coincidir con
+  `--tamaño-marcador`.
+- **Contenedores con desplazamiento horizontal** (`overflow-x: auto`): llevan `position: relative`
+  si dentro hay algo posicionado en absoluto. Ver error 12.
+
 ### Convención de imports de Mongoose (importante)
 
 Mongoose es **CommonJS**. En ESM, Node detecta sus exports con nombre mediante análisis estático, y
@@ -509,19 +544,33 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Endpoints de duties, incluido `GET /routes/:id/duties` | `api/src/duties/duties.controller.ts` |
 | Tests de integración y de concurrencia | `api/test/duties.e2e-spec.ts` |
 | Demo de concurrencia por HTTP | `api/scripts/concurrency-demo.ts` |
-| Punto de entrada del frontend, TanStack Query | `web/src/main.tsx` |
-| Armazón de la interfaz | `web/src/App.tsx` |
+| Punto de entrada del frontend, TanStack Query, política de reintentos | `web/src/main.tsx` |
+| Mapa de pantallas (rutas de navegación) | `web/src/router.tsx` |
+| Armazón de la interfaz: cabecera y navegación | `web/src/App.tsx` |
 | Cliente HTTP único y `ApiError` | `web/src/api/client.ts` |
-| Hook del estado de salud de la api | `web/src/hooks/useApiHealth.ts` |
-| Variables CSS y reinicio global | `web/src/styles/base.css` |
-| Estilos del armazón | `web/src/styles/App.module.css` |
+| Tipos del dominio en el frontend | `web/src/api/types.ts` |
+| Claves de TanStack Query | `web/src/hooks/queryKeys.ts` |
+| Hooks de lectura y escritura | `web/src/hooks/use*.ts` (`useRoutes`, `useRoute`, `useSaveRoute`, `useUnits`, `useCreateUnit`, `useRouteDuties`, `useCreateDuty`, `useDeleteDuty`, `useApiHealth`) |
+| Fechas: formato local con desfase UTC, conversión del formulario | `web/src/utils/dateTime.ts` |
+| Errores de validación agrupados por campo | `web/src/utils/invalidFields.ts` |
+| Borradores de puntos del editor de rutas | `web/src/utils/routePointDrafts.ts` |
+| Centro, zoom y teselas del mapa | `web/src/config/map.ts` |
+| Pantalla: listado de rutas | `web/src/pages/RoutesPage.tsx` |
+| Pantalla: detalle de ruta (mapa, puntos, duties) | `web/src/pages/RouteDetailPage.tsx` |
+| Pantalla: alta y edición de ruta | `web/src/pages/RouteFormPage.tsx` |
+| Pantalla: unidades | `web/src/pages/UnitsPage.tsx` |
+| Pantalla: dirección inexistente | `web/src/pages/NotFoundPage.tsx` |
+| Mapa de una ruta (lectura y editor) | `web/src/components/RouteMap.tsx` |
+| Lista editable de puntos | `web/src/components/RoutePointsEditor.tsx` |
+| Lista de puntos de solo lectura | `web/src/components/RoutePointList.tsx` |
+| Formulario de duty | `web/src/components/DutyForm.tsx` |
+| Aviso de conflicto de horario (409) | `web/src/components/DutyConflictWarning.tsx` |
+| Tabla de duties con borrado | `web/src/components/DutyList.tsx` |
+| Componentes compartidos | `web/src/components/` (`Button`, `StatusMessage`, `SuccessNotice`, `FieldErrors`, `ConfirmDialog`, `ApiHealthBadge`) |
+| Variables CSS, reinicio global y campos de formulario | `web/src/styles/base.css` |
+| Estilos dirigidos a Leaflet (hoja global) | `web/src/styles/leaflet-overrides.css` |
+| Estilos de cada pantalla y componente | `web/src/styles/<Nombre>.module.css` |
 | Configuración del servidor de Vite | `web/vite.config.ts` |
-
-### Pendientes de crear
-
-| Concepto | Archivo previsto | Fase |
-|---|---|---|
-| Hoja global de estilos de Leaflet | `web/src/styles/leaflet-overrides.css` | 3 |
 
 ---
 
@@ -681,15 +730,49 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 - **Solución:** comprobar con `--end-of-line auto`. Con eso, los problemas reales eran 5 archivos
   propios con líneas de más de 100 caracteres, ya formateados. `[verificado-en-dispositivo]`
 
+### 12. En móvil, la pantalla de detalle de ruta se desplazaba de lado
+
+- **Qué falló:** a 390 px de ancho la página medía 530 px.
+- **Causa raíz:** la tabla de duties está dentro de una caja con `overflow-x: auto`, pero el texto
+  oculto de la cabecera "Acciones" lleva `position: absolute`. Un elemento absoluto **escapa del
+  recorte** de un contenedor con `overflow` si ese contenedor no está posicionado, y ensanchaba la
+  página.
+- **Cómo se detectó:** midiendo `scrollWidth` frente a `clientWidth` de cada pantalla en los tres
+  anchos, y listando los elementos que sobresalían fuera del mapa.
+- **Solución:** `position: relative` en `.tableScroller`. Tras el cambio, 15 de 15 combinaciones de
+  pantalla y ancho sin desbordamiento. `[verificado-en-dispositivo]`
+
+### 13. Las capturas de móvil hechas con Edge sin ventana mentían
+
+- **Qué falló:** todas las capturas a 390 px mostraban el contenido cortado por la derecha, incluso
+  en pantallas sin ningún problema.
+- **Causa raíz:** `msedge --headless --window-size=390,...` no admite ventanas tan estrechas: pinta
+  la página más ancha y después recorta la imagen a 390 px.
+- **Cómo se detectó:** midiendo el ancho real con el protocolo de depuración antes de tocar el CSS.
+- **Solución:** para verificar anchos de móvil, emular el viewport con
+  `Emulation.setDeviceMetricsOverride` por el protocolo de depuración (CDP), no con `--window-size`.
+  `[verificado-en-dispositivo]`
+
 ---
 
 ## 9. Supuestos pendientes y riesgos conocidos
 
-- **La interfaz solo se ha verificado a ancho de escritorio.** El armazón de la Fase 0 se comprobó
-  visualmente en escritorio (~950px) y se ve correcto. **No se ha probado en anchos de móvil ni de
-  tableta.** Los estilos están escritos primero para móvil con un punto de quiebre en 600px, pero eso
-  es diseño, no comprobación. Pendiente de verificar en la Fase 3, cuando existan pantallas reales.
-  `[supuesto]` para móvil y tableta.
+- **Cómo se verificó la interfaz (Fase 3).** Con Microsoft Edge sin ventana controlado por su
+  protocolo de depuración (CDP), desde un script ad hoc con el `WebSocket` nativo de Node, **fuera
+  del repositorio** y sin dependencias nuevas:
+  - todas las pantallas a 390, 768 y 1280 px, sin desplazamiento lateral;
+  - los flujos con clics reales, comprobando cada resultado contra la api: crear una ruta con tres
+    clics en el mapa, reordenar un punto, guardar, provocar el 409, asignar y borrar un duty con el
+    diálogo, código de unidad repetido y validación del formulario vacío.
+
+  `[verificado-en-dispositivo]` en Edge. **No probado en Firefox ni Safari**, ni en un móvil físico.
+- **Los campos de fecha siguen el idioma del navegador** (`mm/dd/yyyy` en un navegador en inglés).
+  Es el comportamiento nativo de `datetime-local` y no se puede fijar desde la página.
+- **El aviso de éxito tras guardar una ruta viaja en el estado del historial**: si se recarga la
+  página de detalle justo después, vuelve a aparecer. Inofensivo. `[supuesto]`
+- **El bundle de la interfaz pesa ~760 kB (230 kB comprimido)**, sobre todo por Leaflet y React.
+  Vite avisa a partir de 500 kB. Aceptable para el MVP; se resolvería con carga diferida.
+  `[verificado-en-dispositivo]`
 - **Node del host por debajo del mínimo del CLI de Nest.** `@angular-devkit/schematics`, del que
   depende `@nestjs/cli`, declara `node: ^22.22.3 || ^24.15.0 || >=26.0.0`. El host tiene **24.13.0** y
   emite avisos `EBADENGINE` al instalar. **Dentro de Docker no ocurre**: el contenedor corre Node
@@ -775,6 +858,6 @@ JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conf
 | 0 | Entorno dockerizado, salud, memoria del proyecto | **Terminada** |
 | 1 | Rutas y unidades, filtro de errores, seed | **Terminada** y verificada en Docker |
 | 2 | Duties, regla de solapamiento, concurrencia | **Terminada** y verificada en Docker, con contraprueba |
-| 3 | Frontend completo | Pendiente |
+| 3 | Frontend completo | **Terminada** y verificada en tres anchos, con los flujos recorridos |
 | 4 | Swagger, vista previa de conflictos, edición de duty | Opcional |
 | 5 | Cierre y revisión | Pendiente |

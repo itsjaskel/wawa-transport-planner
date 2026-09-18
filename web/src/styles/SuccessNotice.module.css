@@ -1,0 +1,10 @@
+/* Estilos del aviso de éxito. */
+
+.successNotice {
+  margin: 0 0 var(--espacio-md);
+  padding: var(--espacio-sm) var(--espacio-md);
+  border-radius: var(--radio-md);
+  background-color: var(--color-fondo-exito);
+  color: var(--color-exito);
+  font-weight: var(--peso-medio);
+}

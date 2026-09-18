@@ -1,0 +1,83 @@
+/* Estilos de la pantalla de detalle de una ruta. */
+
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espacio-md);
+  margin-bottom: var(--espacio-lg);
+}
+
+.backLink {
+  display: inline-block;
+  margin-bottom: var(--espacio-xs);
+  font-size: var(--tamaño-sm);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.pageTitle {
+  font-size: var(--tamaño-xl);
+  overflow-wrap: anywhere;
+}
+
+.sectionTitle {
+  font-size: var(--tamaño-lg);
+  margin-bottom: var(--espacio-md);
+}
+
+.cardTitle {
+  font-size: var(--tamaño-md);
+  margin-bottom: var(--espacio-sm);
+}
+
+/* En móvil y tableta el mapa y la lista de puntos se apilan; en escritorio van lado a lado. */
+.mapLayout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-lg);
+  margin-bottom: var(--espacio-xl);
+}
+
+.mapColumn {
+  min-width: 0;
+}
+
+.pointsColumn {
+  min-width: 0;
+}
+
+.dutiesSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+.dutyFormCard {
+  padding: var(--espacio-md);
+  background-color: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-suave);
+}
+
+@media (min-width: 900px) {
+  .mapLayout {
+    grid-template-columns: 2fr 1fr;
+    align-items: start;
+  }
+
+  /* La lista de puntos acompaña al mapa con su misma altura y se desplaza si es más larga. */
+  .pointsColumn {
+    max-height: var(--altura-mapa-escritorio);
+    overflow-y: auto;
+  }
+
+  .dutyFormCard {
+    padding: var(--espacio-lg);
+  }
+}

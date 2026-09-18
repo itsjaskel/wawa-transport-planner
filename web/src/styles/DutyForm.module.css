@@ -1,0 +1,49 @@
+/* Estilos del formulario de asignación de duties. */
+
+.dutyForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+.formHint {
+  margin: 0;
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+.formError {
+  margin: 0;
+  color: var(--color-error);
+}
+
+/* Una columna en móvil; unidad, inicio y fin en fila desde escritorio. */
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-md);
+}
+
+.field {
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+}
+
+.actions > button {
+  flex: 1;
+}
+
+@media (min-width: 600px) {
+  .actions > button {
+    flex: 0 1 auto;
+  }
+}
+
+@media (min-width: 900px) {
+  .fields {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

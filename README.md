@@ -16,11 +16,8 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
 | Duties, regla de solapamiento y concurrencia (api) | Terminado y probado, con contraprueba |
 | Persistencia en MongoDB | Terminado |
 | Entorno completo con un solo comando | Terminado |
-| Interfaz: lista de rutas, detalle con mapa y duties, formularios | **En desarrollo** |
+| Interfaz: lista de rutas, detalle con mapa y duties, formularios | Terminado y probado en móvil, tableta y escritorio |
 | Documentación Swagger, vista previa de conflictos, edición de duty | Opcional, pendiente |
-
-Por ahora la interfaz en `http://localhost:5173` solo muestra el estado del entorno, pero toda la
-funcionalidad ya se puede usar a través de la api.
 
 ## Qué construí
 
@@ -34,6 +31,26 @@ funcionalidad ya se puede usar a través de la api.
   explícitos**, no inicio más duración: el fin es justo lo que se compara al buscar solapamientos,
   así que preferí que fuera un dato y no un cálculo.
 - **Persistencia real** en MongoDB.
+
+### La interfaz
+
+- **Lista de rutas** con su cantidad de puntos y cuándo se actualizó cada una.
+- **Detalle de una ruta:** el mapa con los puntos numerados en su orden y unidos por una línea, la
+  lista de puntos, los duties asignados (unidad, inicio, fin y duración) y un formulario para asignar
+  uno nuevo. Si la unidad está ocupada, la pantalla lo explica en concreto: *"La unidad BUS-001 ya
+  tiene un duty el 19 sep 2026, 04:00 – 08:00 (UTC−04:00) en la ruta Centro - Polanco"*, con un enlace
+  a esa ruta.
+- **Crear y editar rutas** haciendo clic en el mapa: cada clic añade un punto al final. Los puntos se
+  pueden renombrar, corregir a mano, reordenar y quitar, y la línea se redibuja al instante.
+- **Unidades:** alta y listado.
+- Todo cambio se refleja sin recargar la página. Antes de borrar pido confirmación, y cada acción
+  termina con un aviso de que salió bien o con el error explicado junto al campo que lo provocó.
+- **Las horas se muestran en la zona horaria de quien usa la aplicación, siempre con su desfase UTC
+  a la vista** (por ejemplo `UTC−06:00`). La base guarda todo en UTC; así nadie tiene que adivinar en
+  qué zona está leyendo o capturando una hora.
+- Diseñé la interfaz primero para móvil. La probé a 390, 768 y 1280 px de ancho, y en ninguna pantalla
+  la página se desplaza de lado: el mapa y la lista de puntos se apilan en pantallas angostas, y las
+  tablas anchas se desplazan dentro de su propia caja.
 
 ### La regla de solapamiento y por qué no basta con validarla
 
@@ -58,34 +75,38 @@ aunque la api corra en varias instancias.
 
 **¿Cómo sé que funciona?**
 
-- La regla está escrita una sola vez como función pura, con una tabla de 9 casos (antes, después,
-  tocándose en cada extremo, contenido, contenedor, idéntico, cruzando la medianoche).
-- **La misma tabla se ejecuta contra la base real**, porque en ejecución manda la consulta y no la
-  función: un error en la consulta pasaría desapercibido si solo se probara la función.
-- 10 peticiones simultáneas solapadas sobre la misma unidad: **se crea exactamente 1**. 10 simultáneas
-  que no se solapan: **se crean las 10**; el bloqueo ordena, no descarta.
+- Escribí la regla una sola vez, como función pura, y la probé con una tabla de 9 casos (antes,
+  después, tocándose en cada extremo, contenido, contenedor, idéntico, cruzando la medianoche).
+- **Ejecuto la misma tabla contra la base real**, porque en ejecución manda la consulta y no la
+  función: un error en la consulta pasaría desapercibido si solo probara la función.
+- Lancé 10 peticiones simultáneas solapadas sobre la misma unidad: **se crea exactamente 1**. Y 10
+  simultáneas que no se solapan: **se crean las 10**; el bloqueo ordena, no descarta.
 - **Contraprueba:** quité el incremento a propósito y el test falló, que es lo que tenía que pasar.
   En tres ejecuciones seguidas se crearon **3 duties solapados** en la misma unidad. O sea, el test
   de verdad detecta lo que dice probar.
 
 ### Integridad y seguridad de la entrada
 
-- Toda entrada se valida antes de tocar la base: rangos de latitud y longitud, longitudes de texto,
-  cantidad de puntos, fin posterior al inicio. Las mismas reglas se repiten en el esquema de la base,
+- Valido toda entrada antes de tocar la base: rangos de latitud y longitud, longitudes de texto,
+  cantidad de puntos, fin posterior al inicio. Repito las mismas reglas en el esquema de la base,
   para que ninguna escritura que no pase por la api deje datos inválidos.
-- Se rechazan los campos no declarados, lo que impide colar operadores de MongoDB en el cuerpo.
-- Las fechas se exigen **con zona horaria**. Sin ella, `2030-03-15T08:00` se interpretaría en la hora
+- Rechazo los campos no declarados, lo que impide colar operadores de MongoDB en el cuerpo.
+- Exijo las fechas **con zona horaria**. Sin ella, `2030-03-15T08:00` se interpretaría en la hora
   del servidor y el duty quedaría movido de hora sin que nadie se diera cuenta.
 - Todos los errores salen con el mismo formato, en español y diciendo qué campo falló. El 409 de
-  solapamiento incluye el duty con el que se choca (ruta, unidad, inicio y fin), para que la interfaz
-  pueda decir exactamente por qué no se pudo asignar. Un error inesperado nunca expone detalles
-  internos.
-- Cabeceras de seguridad, CORS limitado al origen de la interfaz y límite de tamaño de las peticiones.
+  solapamiento incluye el duty con el que se choca (ruta, unidad, inicio y fin), que es lo que usa la
+  interfaz para explicar el conflicto. Un error inesperado nunca expone detalles internos.
+- Añadí cabeceras de seguridad, CORS limitado al origen de la interfaz y un límite de tamaño para las
+  peticiones.
 
 ### Pruebas automatizadas
 
-33 pruebas unitarias y 22 de integración contra MongoDB real, incluidas las de concurrencia. Hay
-además un script de demostración que dispara peticiones simultáneas contra la api en marcha.
+La api tiene 33 pruebas unitarias y 22 de integración contra MongoDB real, incluidas las de
+concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
+
+La interfaz no tiene pruebas automatizadas (lo explico abajo). La recorrí con clics reales en un
+navegador: crear una ruta desde el mapa, reordenar sus puntos, provocar el conflicto de horario,
+borrar un duty y repetir un código de unidad, comprobando cada resultado contra la api.
 
 ## Por qué MongoDB
 
@@ -115,24 +136,28 @@ donde no conviene.
 | Consultar qué tiene asignado una unidad | Solo se consultan los duties por ruta, que es lo que pide el brief. |
 | Duties recurrentes (todos los lunes…) | Los duties son fechas absolutas. Los recurrentes cambian por completo el modelo de la regla. |
 | GraphQL y Prisma | No resuelven ningún problema de este MVP y añadirían una capa más que mantener. |
-| Cálculo de trayectos sobre calles | El mapa mostrará los puntos unidos en línea recta, sobre OpenStreetMap. Calcular recorridos reales exige un servicio externo con cuenta, y el proyecto debe levantar sin configurar nada. |
+| Cálculo de trayectos sobre calles | El mapa une los puntos en línea recta, sobre OpenStreetMap. Calcular recorridos reales exige un servicio externo con cuenta, y quiero que el proyecto levante sin configurar nada. |
+| Pruebas automatizadas de la interfaz | El brief pone el foco en la lógica crítica, que está en la api y está cubierta. Para la interfaz habría que añadir herramientas nuevas; preferí recorrer los flujos a mano en un navegador. |
+| Mostrar las horas en la zona de la flota | Muestro cada hora en la zona de quien mira, con su desfase UTC visible. Si la flota operara siempre en una zona concreta, convendría mostrar todo en esa zona; es una constante de configuración que no añadí sin saberlo. |
 | Paginación | Con los volúmenes de un MVP no hace falta. |
 | Despliegue en producción | El entorno está pensado para desarrollo y evaluación local. La api tiene una etapa de producción en su `Dockerfile`, pero no se ha probado; la interfaz no la tiene. |
 
 ## Qué haría distinto con más tiempo
 
-- **Evaluar en serio PostgreSQL** con la restricción de exclusión, para que la base garantice la
+- **Evaluaría en serio PostgreSQL** con la restricción de exclusión, para que la base garantice la
   regla por sí misma. Si hubiera que quedarse en MongoDB, añadiría una verificación periódica que
   busque solapamientos y avise, como red de seguridad independiente del código.
-- **Vista de disponibilidad:** al elegir una ventana, marcar qué unidades están libres. La pregunta
+- **Añadiría una vista de disponibilidad:** al elegir una ventana, marcar qué unidades están libres. La pregunta
   real del planificador es "¿qué unidad tengo libre para esta ruta en este horario?", no "¿por qué
   falló mi asignación?".
-- **Pruebas de extremo a extremo de la interfaz** (por ejemplo con Playwright) y un pipeline de
-  integración continua que ejecute todas las pruebas, incluida la contraprueba, en cada cambio.
-- **Probar el caso límite de contención extrema:** si las transacciones agotan sus reintentos, la api
-  responde 503. Ese camino está programado y contrastado con el código del driver de MongoDB, pero no
-  se ha provocado en una prueba.
-- **Auditoría de cambios:** quién asignó o borró cada duty y cuándo.
+- **Automatizaría las pruebas de extremo a extremo de la interfaz** (por ejemplo con Playwright) y
+  montaría un pipeline de integración continua que ejecute todas las pruebas, incluida la contraprueba, en cada cambio.
+- **Probaría el caso límite de contención extrema:** si las transacciones agotan sus reintentos, la
+  api responde 503. Ese camino está programado y contrastado con el código del driver de MongoDB, pero
+  no lo he provocado en una prueba.
+- **Guardaría una auditoría de cambios:** quién asignó o borró cada duty y cuándo.
+- **Dividiría el código de la interfaz en partes que se carguen por separado.** Hoy el mapa y React
+  van en un solo archivo de unos 760 kB (230 kB comprimido); para un MVP es aceptable.
 
 ## Cómo usar este proyecto
 
@@ -176,7 +201,7 @@ docker compose up --build -d
 
 | Qué | Dirección |
 |---|---|
-| Interfaz | http://localhost:5173 |
+| Interfaz | http://localhost:5173 (abre el listado de rutas) |
 | Api | http://localhost:3000/api |
 | Estado de la api | http://localhost:3000/api/health |
 

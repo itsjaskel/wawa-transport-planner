@@ -1,0 +1,33 @@
+/* Estilos del mensaje de estado: carga, listado vacío y error. */
+
+.statusMessage {
+  border-radius: var(--radio-md);
+  padding: var(--espacio-lg) var(--espacio-md);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-weight: var(--peso-medio);
+}
+
+.body {
+  margin-top: var(--espacio-sm);
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+.loading {
+  background-color: var(--color-fondo-neutro);
+  color: var(--color-texto-suave);
+}
+
+.empty {
+  background-color: var(--color-superficie);
+  border: 1px dashed var(--color-borde);
+}
+
+.error {
+  background-color: var(--color-fondo-error);
+  color: var(--color-error);
+}

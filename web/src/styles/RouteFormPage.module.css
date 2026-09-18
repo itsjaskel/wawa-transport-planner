@@ -1,0 +1,80 @@
+/* Estilos de la pantalla de alta y edición de rutas. */
+
+.routeForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-lg);
+}
+
+.pageTitle {
+  font-size: var(--tamaño-xl);
+}
+
+.nameField {
+  max-width: var(--ancho-máximo-formulario);
+}
+
+.sectionTitle {
+  font-size: var(--tamaño-lg);
+  margin-bottom: var(--espacio-sm);
+}
+
+.hint {
+  margin: 0 0 var(--espacio-sm);
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+/* En móvil y tableta el mapa y los puntos se apilan; en escritorio van lado a lado. */
+.editorLayout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-lg);
+}
+
+.mapColumn,
+.pointsColumn {
+  min-width: 0;
+}
+
+.formError {
+  margin: 0;
+  color: var(--color-error);
+}
+
+/* En móvil el botón principal ocupa todo el ancho y cancelar queda debajo. */
+.actions {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: var(--espacio-sm);
+}
+
+.cancelLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--altura-minima-toque);
+}
+
+@media (min-width: 600px) {
+  .actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--espacio-md);
+  }
+}
+
+@media (min-width: 900px) {
+  .editorLayout {
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+  }
+
+  /* La lista de puntos acompaña al mapa y se desplaza si es más larga que él. */
+  .pointsColumn {
+    max-height: var(--altura-mapa-escritorio);
+    overflow-y: auto;
+  }
+}

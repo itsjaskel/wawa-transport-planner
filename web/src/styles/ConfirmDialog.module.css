@@ -1,0 +1,37 @@
+/* Estilos del diálogo de confirmación. */
+
+.confirmDialog {
+  width: min(var(--ancho-dialogo), calc(100vw - 2 * var(--espacio-md)));
+  padding: var(--espacio-lg);
+  border: none;
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-suave);
+}
+
+.confirmDialog::backdrop {
+  background-color: var(--color-velo);
+}
+
+.title {
+  font-size: var(--tamaño-lg);
+  margin-bottom: var(--espacio-sm);
+}
+
+.description {
+  margin: 0 0 var(--espacio-lg);
+  color: var(--color-texto-suave);
+}
+
+/* En móvil los botones se apilan a lo ancho; desde tableta van en fila a la derecha. */
+.actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--espacio-sm);
+}
+
+@media (min-width: 600px) {
+  .actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}

@@ -14,7 +14,7 @@ export interface ApiHealth {
   };
 }
 
-/** Entrega el estado de salud de la api, refrescandolo periodicamente. */
+/** Entrega el estado de salud de la api, refrescándolo periódicamente. */
 export function useApiHealth() {
   return useQuery({
     queryKey: ['health'],

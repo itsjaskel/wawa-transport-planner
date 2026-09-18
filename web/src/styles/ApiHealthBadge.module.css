@@ -1,0 +1,26 @@
+/* Estilos de la etiqueta de estado de la conexión. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--espacio-xs) var(--espacio-sm);
+  border-radius: var(--radio-sm);
+  font-size: var(--tamaño-xs);
+  font-weight: var(--peso-medio);
+  white-space: nowrap;
+}
+
+.loading {
+  background-color: var(--color-fondo-neutro);
+  color: var(--color-texto-suave);
+}
+
+.ok {
+  background-color: var(--color-fondo-exito);
+  color: var(--color-exito);
+}
+
+.error {
+  background-color: var(--color-fondo-error);
+  color: var(--color-error);
+}

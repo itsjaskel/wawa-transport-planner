@@ -1,0 +1,63 @@
+/* Estilos de la pantalla del listado de rutas. */
+
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-md);
+  margin-bottom: var(--espacio-lg);
+}
+
+.pageTitle {
+  font-size: var(--tamaño-xl);
+}
+
+/* Una columna en móvil; dos en tableta y tres en escritorio. */
+.routeList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routeCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-xs);
+  padding: var(--espacio-md);
+  background-color: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-suave);
+}
+
+.routeLink {
+  font-size: var(--tamaño-lg);
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.routeLink:hover {
+  text-decoration: underline;
+}
+
+.routeMeta {
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-sm);
+}
+
+@media (min-width: 600px) {
+  .routeList {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .routeList {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

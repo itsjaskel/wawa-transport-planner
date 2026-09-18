@@ -17,6 +17,15 @@
   --color-error: #b3261e;
   --color-aviso: #8a5a00;
   --color-foco: #1d5fd6;
+  /* Fondos suaves para mensajes y etiquetas de estado. */
+  --color-fondo-neutro: #e8ecf3;
+  --color-fondo-exito: #e3f3ea;
+  --color-fondo-error: #fbe9e7;
+  --color-fondo-aviso: #fdf3e1;
+  /* Línea que une los puntos de una ruta en el mapa. */
+  --color-linea-ruta: #1d5fd6;
+  /* Velo que oscurece la página detrás de un diálogo modal. */
+  --color-velo: rgba(28, 36, 48, 0.45);
 
   /* Espaciado */
   --espacio-xs: 0.25rem;
@@ -26,8 +35,7 @@
   --espacio-xl: 2.5rem;
 
   /* Tipografía */
-  --fuente-base:
-    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --tamaño-xs: 0.8125rem;
   --tamaño-sm: 0.9375rem;
   --tamaño-md: 1rem;
@@ -47,6 +55,12 @@
   /* Medidas */
   --ancho-máximo-contenido: 72rem;
   --altura-minima-toque: 44px;
+  --ancho-máximo-formulario: 36rem;
+  /* El mapa ocupa buena parte de la pantalla en móvil sin tapar el resto, y crece en escritorio. */
+  --altura-mapa: clamp(16rem, 45vh, 28rem);
+  --altura-mapa-escritorio: clamp(22rem, 60vh, 36rem);
+  --tamaño-marcador: 28px;
+  --ancho-dialogo: 28rem;
 }
 
 /*
@@ -90,7 +104,7 @@ a {
   color: var(--color-primario);
 }
 
-/* El foco de teclado debe verse siempre: es el único rastro visual para quien no usa raton. */
+/* El foco de teclado debe verse siempre: es el único rastro visual para quien no usa ratón. */
 :focus-visible {
   outline: 3px solid var(--color-foco);
   outline-offset: 2px;
@@ -101,4 +115,31 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/*
+ * Campos de formulario. Se estilan aquí, de forma global, porque son iguales en todas las
+ * pantallas; la disposición de cada formulario vive en el módulo de su pantalla.
+ */
+input,
+select {
+  width: 100%;
+  min-height: var(--altura-minima-toque);
+  padding: var(--espacio-sm);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  background-color: var(--color-superficie);
+  color: var(--color-texto);
+}
+
+input[aria-invalid='true'],
+select[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--espacio-xs);
+  font-size: var(--tamaño-sm);
+  font-weight: var(--peso-medio);
 }

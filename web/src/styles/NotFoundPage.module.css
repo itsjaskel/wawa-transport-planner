@@ -1,0 +1,6 @@
+/* Estilos de la pantalla de dirección inexistente. */
+
+.notFoundPage {
+  max-width: var(--ancho-máximo-formulario);
+  margin: var(--espacio-xl) auto 0;
+}

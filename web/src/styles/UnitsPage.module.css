@@ -1,0 +1,104 @@
+/* Estilos de la pantalla de unidades. */
+
+.pageTitle {
+  font-size: var(--tamaño-xl);
+  margin-bottom: var(--espacio-lg);
+}
+
+.sectionTitle {
+  font-size: var(--tamaño-lg);
+  margin-bottom: var(--espacio-md);
+}
+
+/* En móvil el formulario va arriba y el listado debajo; en escritorio, lado a lado. */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-lg);
+  align-items: start;
+}
+
+.formCard {
+  padding: var(--espacio-md);
+  background-color: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-suave);
+}
+
+.createUnitForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+.fieldHelp {
+  margin: var(--espacio-xs) 0 0;
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-xs);
+}
+
+.formError {
+  margin: 0;
+  color: var(--color-error);
+}
+
+.actions {
+  display: flex;
+}
+
+.actions > button {
+  flex: 1;
+}
+
+/* El desplazamiento horizontal queda contenido en esta caja: la página nunca se mueve de lado. */
+.tableScroller {
+  overflow-x: auto;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  background-color: var(--color-superficie);
+}
+
+.unitsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--tamaño-sm);
+}
+
+.unitsTable th,
+.unitsTable td {
+  padding: var(--espacio-sm) var(--espacio-md);
+  border-bottom: 1px solid var(--color-borde);
+  text-align: left;
+}
+
+.unitsTable th {
+  background-color: var(--color-fondo);
+  color: var(--color-texto-suave);
+  font-weight: var(--peso-medio);
+}
+
+.unitsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.unitCode {
+  font-weight: var(--peso-fuerte);
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr 2fr;
+  }
+
+  .formCard {
+    padding: var(--espacio-lg);
+  }
+}

@@ -40,6 +40,22 @@ correcto.
   responsive.
 - **Nombre visible `Rumb@` e identificador técnico `rumbo`**, porque la `@` no es válida en npm ni en
   Docker Compose.
+- **En la interfaz:**
+  - **Las horas se guardan en UTC y se muestran en la zona de quien mira, siempre con su desfase
+    UTC visible** (`19 sep 2026, 04:00 – 08:00 (UTC−04:00)`). El desfase se calcula para cada fecha,
+    porque con horario de verano no es el mismo en julio que en diciembre. Al capturar, el formulario
+    envía la hora con su desfase explícito, que es lo que la api exige.
+  - **El conflicto de horario se explica en concreto**: qué unidad, en qué ruta y a qué horas, con
+    un enlace a esa ruta. Un "no se pudo guardar" genérico no le dice al planificador qué hacer.
+  - **El formulario de duty vive en el detalle de la ruta**, porque la ruta ya está elegida y solo
+    faltan la unidad y el horario.
+  - **Un solo componente de mapa** para el detalle y para el editor, para que los marcadores
+    numerados y la línea se vean igual en los dos sitios.
+  - **Sin librerías de interfaz:** la confirmación de borrado usa el `<dialog>` nativo de HTML y
+    los avisos son componentes propios.
+  - **Verificación en tres anchos reales** (390, 768 y 1280 px) y recorrido de los flujos con clics
+    en un navegador. Decidí no añadir pruebas automatizadas de la interfaz: la lógica crítica está
+    en la api y ya está cubierta.
 - **Cambio de regla durante el proyecto:** al principio reservé para mí el README y esta bitácora.
   Después de la Fase 2 decidí que la IA mantuviera las instrucciones de uso del README en cada fase,
   y más tarde que redactara también el resto del README y esta bitácora, que yo reviso.
@@ -87,6 +103,14 @@ que cambiaron el resultado:
   podía cerrar la versión anterior.
 - **La memoria del proyecto afirmaba de más.** Una corrección de la Fase 0 figuraba como verificada y
   estaba incompleta. Se rebajó la etiqueta y se corrigió el trabajo.
+- **En móvil, la pantalla de detalle se desplazaba de lado.** La tabla de duties se desplaza dentro
+  de su caja, pero un texto oculto para lectores de pantalla, posicionado en absoluto, escapaba de
+  ese recorte y ensanchaba la página hasta 530 px. Lo encontré midiendo el ancho de cada pantalla en
+  los tres tamaños, no a ojo. Se corrigió con una línea de CSS.
+- **Una falsa alarma que no di por buena.** Las primeras capturas de móvil mostraban todas las
+  pantallas cortadas. Antes de tocar el CSS medí el ancho real: el navegador sin ventana no admite
+  ventanas tan estrechas y recortaba la imagen. Solo una pantalla desbordaba de verdad (la del punto
+  anterior).
 - **Fallos del entorno, no del código:** virtualización desactivada en la BIOS y el reloj del sistema
   desfasado tres horas, que rompía la construcción de imágenes. Se documentaron para quien levante el
   proyecto en otra máquina.
@@ -94,5 +118,5 @@ que cambiaron el resultado:
 ## Nota sobre las fuentes
 
 Esta bitácora se basa en el documento de requisitos que entregué a la IA, en `CLAUDE.md` y en las
-conversaciones de las fases 1 y 2. De la Fase 0 solo se recoge lo que quedó registrado en
+conversaciones de las fases 1 a 3. De la Fase 0 solo se recoge lo que quedó registrado en
 `CLAUDE.md`.

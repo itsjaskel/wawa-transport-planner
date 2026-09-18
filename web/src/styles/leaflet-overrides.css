@@ -1,0 +1,46 @@
+/*
+ * Estilos dirigidos a Leaflet. Es una hoja GLOBAL a propósito y no debe convertirse en módulo:
+ * Leaflet crea sus nodos fuera de React y no ve los nombres de clase que generan los módulos CSS,
+ * así que los marcadores y el contenedor del mapa dejarían de tener estilo.
+ */
+
+/* Sin una altura explícita el contenedor de Leaflet mide 0 y el mapa no se ve. */
+.route-map {
+  width: 100%;
+  height: var(--altura-mapa);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  z-index: 0;
+}
+
+/* En el formulario, el cursor en cruz indica que un clic añade un punto. */
+.route-map-editable.leaflet-container {
+  cursor: crosshair;
+}
+
+/* Línea que une los puntos en su orden. */
+.route-line {
+  stroke: var(--color-linea-ruta);
+}
+
+/* Marcador numerado: el número es la posición del punto en la ruta. */
+.route-point-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tamaño-marcador);
+  height: var(--tamaño-marcador);
+  border: 2px solid var(--color-superficie);
+  border-radius: 50%;
+  background-color: var(--color-primario);
+  color: var(--color-primario-contraste);
+  font-size: var(--tamaño-xs);
+  font-weight: var(--peso-fuerte);
+  box-shadow: var(--sombra-suave);
+}
+
+@media (min-width: 900px) {
+  .route-map {
+    height: var(--altura-mapa-escritorio);
+  }
+}

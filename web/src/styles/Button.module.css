@@ -1,0 +1,49 @@
+/* Estilos de los botones y de los enlaces con aspecto de botón. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-xs);
+  min-height: var(--altura-minima-toque);
+  padding: var(--espacio-sm) var(--espacio-md);
+  border: 1px solid transparent;
+  border-radius: var(--radio-md);
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary {
+  background-color: var(--color-primario);
+  color: var(--color-primario-contraste);
+}
+
+.primary:hover:not(:disabled) {
+  background-color: var(--color-primario-oscuro);
+}
+
+.secondary {
+  background-color: var(--color-superficie);
+  border-color: var(--color-borde);
+  color: var(--color-texto);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--color-fondo);
+}
+
+.danger {
+  background-color: var(--color-superficie);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.danger:hover:not(:disabled) {
+  background-color: var(--color-fondo-error);
+}

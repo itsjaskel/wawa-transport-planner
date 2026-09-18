@@ -1,32 +1,66 @@
 // Cliente HTTP único de la aplicación: concentra la url base de la api y la
 // traducción de una respuesta de error a algo que la interfaz pueda mostrar.
+import type { ConflictingDuty, InvalidField } from './types';
 
 // Vite incrusta esta variable en tiempo de compilación, no de ejecución.
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+const HTTP_STATUS_NO_CONTENT = 204;
+const UNREADABLE_ERROR_TYPE = 'UnreadableError';
 
-/** Error de una llamada a la api, con el código de estado para que la interfaz decida qué mostrar. */
+/** Cuerpo de error uniforme que devuelve la api. */
+interface ApiErrorBody {
+  statusCode: number;
+  error: string;
+  message: string;
+  details?: unknown;
+}
+
+/** Error de una llamada a la api, con código, tipo y detalles para que la interfaz decida qué mostrar. */
 export class ApiError extends Error {
   readonly statusCode: number;
+  readonly errorType: string;
+  readonly details: unknown;
 
-  constructor(statusCode: number, message: string) {
+  /** Crea el error con los datos del cuerpo de error de la api. */
+  constructor(statusCode: number, errorType: string, message: string, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
+    this.errorType = errorType;
+    this.details = details;
+  }
+
+  /** Devuelve los campos inválidos de un error de validación, o una lista vacía. */
+  readInvalidFields(): InvalidField[] {
+    const isValidationError = this.errorType === 'ValidationError' && Array.isArray(this.details);
+    if (!isValidationError) {
+      return [];
+    }
+    return this.details as InvalidField[];
+  }
+
+  /** Devuelve el duty con el que choca un 409 de solapamiento, o null si no es ese error. */
+  readConflictingDuty(): ConflictingDuty | null {
+    const isOverlapConflict = this.errorType === 'Conflict';
+    if (!isOverlapConflict) {
+      return null;
+    }
+    const conflictDetails = this.details as { conflictingDuty?: ConflictingDuty } | undefined;
+    return conflictDetails?.conflictingDuty ?? null;
   }
 }
 
-/** Lee el mensaje legible que trae el cuerpo de una respuesta de error de la api. */
-async function readErrorMessage(response: Response): Promise<string> {
+/** Convierte una respuesta de error en ApiError, aunque el cuerpo no tenga el formato esperado. */
+async function createApiError(response: Response): Promise<ApiError> {
+  const fallbackMessage = `La api respondió con el código ${response.status}.`;
+
   try {
-    const body = await response.json();
-
-    if (typeof body?.message === 'string') {
-      return body.message;
-    }
-
-    return `La api respondio con el código ${response.status}.`;
+    const body = (await response.json()) as Partial<ApiErrorBody>;
+    const message = typeof body.message === 'string' ? body.message : fallbackMessage;
+    const errorType = typeof body.error === 'string' ? body.error : UNREADABLE_ERROR_TYPE;
+    return new ApiError(response.status, errorType, message, body.details);
   } catch {
-    return `La api respondio con el código ${response.status}.`;
+    return new ApiError(response.status, UNREADABLE_ERROR_TYPE, fallbackMessage);
   }
 }
 
@@ -44,9 +78,22 @@ export async function requestApi<TResponse>(
   });
 
   if (!response.ok) {
-    const message = await readErrorMessage(response);
-    throw new ApiError(response.status, message);
+    throw await createApiError(response);
+  }
+
+  // Un 204 (por ejemplo, al borrar) no trae cuerpo: leerlo como JSON fallaría.
+  if (response.status === HTTP_STATUS_NO_CONTENT) {
+    return undefined as TResponse;
   }
 
   return (await response.json()) as TResponse;
+}
+
+/** Envía un cuerpo JSON con el método indicado. */
+export function sendApiJson<TResponse>(
+  method: string,
+  path: string,
+  body: unknown,
+): Promise<TResponse> {
+  return requestApi<TResponse>(path, { method, body: JSON.stringify(body) });
 }

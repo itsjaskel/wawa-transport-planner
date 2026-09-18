@@ -1,0 +1,47 @@
+/* Estilos de la lista de puntos de solo lectura. */
+
+.routePointList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-sm);
+}
+
+.pointItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-sm);
+}
+
+/* Mismo aspecto que el marcador del mapa, para relacionar cada fila con su punto. */
+.pointNumber {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tamaño-marcador);
+  height: var(--tamaño-marcador);
+  border-radius: 50%;
+  background-color: var(--color-primario);
+  color: var(--color-primario-contraste);
+  font-size: var(--tamaño-xs);
+  font-weight: var(--peso-fuerte);
+}
+
+.pointText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pointName {
+  font-weight: var(--peso-medio);
+  overflow-wrap: anywhere;
+}
+
+.pointCoordinates {
+  color: var(--color-texto-suave);
+  font-size: var(--tamaño-xs);
+}

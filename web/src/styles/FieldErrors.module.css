@@ -1,0 +1,9 @@
+/* Estilos de los errores de un campo de formulario. */
+
+.fieldErrors {
+  margin: var(--espacio-xs) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-error);
+  font-size: var(--tamaño-xs);
+}
