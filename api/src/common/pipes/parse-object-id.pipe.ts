@@ -18,7 +18,8 @@ export class ParseObjectIdPipe implements PipeTransform<string, string> {
       throw new ApiException(
         HttpStatus.BAD_REQUEST,
         API_ERROR_TYPES.invalidId,
-        `"${value}" no es un id válido.`,
+        // No se repite el valor recibido: devolver entradas arbitrarias del usuario no aporta nada.
+        'El id de la url no tiene un formato válido.',
       );
     }
 

@@ -215,7 +215,9 @@ relajar la desconfianza justo donde hace falta. Media defensa es peor que ningun
   (`TransientTransactionError` o `UnknownTransactionCommitResult`); solo lo envuelve en
   `MongoOperationTimeoutError` si se configura `timeoutMS`. El servicio reconoce ambas formas y
   responde **503 `ScheduleBusy`**. En el driver 7.6.0 hay además espera creciente entre reintentos.
-  `[verificado-contra-la-librería]`. El 503 en sí **no se ha provocado nunca**: `[compila]`.
+  `[verificado-contra-la-librería]`. La traducción a 503 está probada con errores fabricados con las
+  mismas etiquetas del driver (`domain/transaction-errors.spec.ts`) `[verificado-en-dispositivo]`;
+  el vencimiento real de 120 s **nunca se ha provocado**.
 - **El borrado de un duty no bloquea la unidad.** Borrar no puede crear solapamientos; en el peor
   caso una creación simultánea todavía ve el duty que se borra y responde 409 de más, que es el
   error seguro.
@@ -236,16 +238,16 @@ con sesión, solo en la edición): tres ejecuciones, las tres `{ 200: 3, 409: 7 
 ### El inicio de un duty no puede estar en el pasado
 
 Regla del responsable. Al **crear y al editar**, el inicio debe ser del minuto actual o posterior (se
-compara con el comienzo del minuto: los campos de fecha no tienen segundos). Vive en
-`DutyWindowDto` (`api/src/duties/dto/duty-window.dto.ts`), que heredan la creación y la edición; la
-consulta de disponibilidad usa `TimeWindowDto` y **sí** admite horarios pasados. En la interfaz,
+compara con el comienzo del minuto: los campos de fecha no tienen segundos). Vive en el grupo de
+reglas `DutyStartAtRules` (`api/src/duties/dto/time-window-rules.ts`), que aplican la creación y la
+edición; la consulta de disponibilidad usa `WindowStartAtRules` y **sí** admite horarios pasados. En la interfaz,
 `validateDutyWindow` recibe "ahora" como parámetro (las pruebas no dependen del reloj) y el campo
 Inicio lleva `min`. Consecuencia aceptada: un duty que ya empezó no se puede editar sin moverlo al
 futuro; sí se puede borrar. `[verificado-en-dispositivo]`
 
-Trampa: la regla se añade en la subclase con `@Decorador() declare startAt: string;`. Con `declare`
-no se redefine el campo, y **el decorador sí se aplica en ejecución** (lo prueba el test del inicio
-en el pasado). `[verificado-en-dispositivo]`
+**Las reglas de la ventana no se heredan entre dtos** (ver error 17): cada dto declara sus campos y
+les aplica un grupo de reglas (`WindowStartAtRules`, `DutyStartAtRules`, `WindowEndAtRules`).
+`time-window-rules.spec.ts` comprueba las diez reglas comunes en los tres dtos.
 
 ### Vista previa de disponibilidad: ayuda, no garantía
 
@@ -316,6 +318,14 @@ Levanta en orden: `mongo` → `mongo-init` (inicializa el replica set y termina)
 Desde cero, con las imágenes ya construidas, tarda unos **20 segundos** hasta que todo está sano.
 `[verificado-en-dispositivo]`
 
+**Prueba desde un clon limpio (Fase 5)** `[verificado-en-dispositivo]`: se copiaron a una carpeta
+nueva solo los archivos que entran en git (`git ls-files`, sin `node_modules`), se borró el volumen,
+y siguiendo únicamente el README: construcción sin caché en **45 s**, api sana en **21 s**, seed
+completo e idempotente, 74 + 78 + 10 pruebas en verde, demo con 1 creado y 9 rechazados, y puertos
+solo en `127.0.0.1`. Encontró un fallo del README (un enlace a la raíz de la api, que da 404), ya
+corregido. Los datos del entorno original se guardaron con `mongodump` (verificado restaurándolo en
+una base aparte) y se restauraron con `mongorestore --drop`, conservando los ids.
+
 ### Puertos
 
 | Servicio | Host | Nota |
@@ -323,6 +333,12 @@ Desde cero, con las imágenes ya construidas, tarda unos **20 segundos** hasta q
 | web | `http://localhost:5173` | |
 | api | `http://localhost:3000/api` | |
 | mongo | `localhost:27018` | Deliberadamente distinto de 27017, para no chocar con un MongoDB ya instalado |
+
+**Los tres puertos se publican solo en `127.0.0.1`** (`'127.0.0.1:27018:27017'` en el compose). Sin
+esa IP, Docker los publica en todas las interfaces del equipo, y una base sin contraseña y una api
+sin autenticación quedarían abiertas a cualquiera en la misma red. Ver error 18.
+`[verificado-en-dispositivo]`: desde la IP de red del equipo no hay conexión; desde `localhost`,
+todo funciona, incluido un cliente de MongoDB con la cadena de siempre.
 
 ### Comprobar
 
@@ -337,8 +353,8 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 ### Tests dentro del contenedor
 
 ```bash
-docker compose exec api npm test                   # unitarios (33 tests)
-docker compose exec api npm run test:e2e           # integración contra MongoDB real (65 tests)
+docker compose exec api npm test                   # unitarios (74 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (78 tests)
 docker compose exec web npm test                   # lógica pura de la interfaz, con `node --test` (10)
 docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
@@ -506,7 +522,14 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   recorre cada campo con un carácter de más: **al añadir un campo de texto, se añade ahí**. En la web,
   los mismos máximos van como `maxLength` desde `web/src/config/fieldLimits.ts`, que debe coincidir
   con la api. `[verificado-en-dispositivo]`
-- **Ids en la url:** siempre con `ParseObjectIdPipe`, que exige 24 dígitos hexadecimales. No se usa
+- **Solo JSON:** `requireJsonBody` (`common/middleware/require-json-body.ts`) rechaza con 415 los
+  POST, PUT y PATCH que no llegan como `application/json`. Un formulario de otra web se envía desde
+  el navegador sin la comprobación previa de CORS; un JSON, no. `[verificado-en-dispositivo]`
+- **Swagger solo fuera de producción** (`NODE_ENV !== 'production'`).
+- **Nada de herencia entre dtos con reglas de validación.** Si una subclase añade una regla a un campo
+  heredado, class-validator descarta TODAS las reglas heredadas de ese campo. Las reglas comunes se
+  agrupan con `applyDecorators` y cada dto las aplica a sus propios campos. Ver error 17.
+- **Ids en la url:** siempre con `ParseObjectIdPipe`, que no repite en el mensaje lo recibido, que exige 24 dígitos hexadecimales. No se usa
   `Types.ObjectId.isValid` porque acepta cualquier cadena de 12 caracteres. `[verificado-en-dispositivo]`
   (test unitario).
 - **Actualizaciones:** siempre con `runValidators: true`; sin esa opción Mongoose no valida el esquema
@@ -652,13 +675,16 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Regla de solapamiento (función pura y filtro de Mongo) | `api/src/duties/domain/overlap.ts` |
 | Tabla de 9 casos de solapamiento, compartida por los tests | `api/src/duties/domain/overlap-cases.ts` |
 | Esquema del duty, validación de ventana, índices, virtual `unit` | `api/src/duties/schemas/duty.schema.ts` |
-| Validación de la ventana (zona obligatoria, años 2000–2100, fin posterior), compartida | `api/src/duties/dto/time-window.dto.ts` |
-| Regla del inicio no pasado, para crear y editar | `api/src/duties/dto/duty-window.dto.ts` |
+| Reglas de las fechas de una ventana (formato, zona, longitud, años, inicio no pasado, fin posterior, tope de días) | `api/src/duties/dto/time-window-rules.ts` |
+| Prueba de que los tres dtos con ventana aplican todas las reglas | `api/src/duties/dto/time-window-rules.spec.ts` |
+| Rechazo de cuerpos que no son JSON (415) | `api/src/common/middleware/require-json-body.ts` |
+| Pruebas de seguridad (inyección, prototipo, tipos de contenido, límites, cabeceras) | `api/test/security.e2e-spec.ts` |
 | Validación de la creación de duty | `api/src/duties/dto/create-duty.dto.ts` |
 | Validación de la edición de duty (unidad y ventana) | `api/src/duties/dto/update-duty.dto.ts` |
 | Parámetros de la consulta de disponibilidad | `api/src/duties/dto/unit-availability-query.dto.ts` |
 | Disponibilidad y edición de duties (servicio) | `api/src/duties/duties.service.ts` (`findUnitAvailability`, `updateDuty`) |
-| Transacción, bloqueo de la unidad (`$inc`), 409 y 503 | `api/src/duties/duties.service.ts` |
+| Transacción, bloqueo de la unidad (`$inc`) y 409 | `api/src/duties/duties.service.ts` |
+| Traducción del agotamiento de reintentos a 503, y sus pruebas | `api/src/duties/domain/transaction-errors.ts` |
 | Endpoints de duties, incluido `GET /routes/:id/duties` | `api/src/duties/duties.controller.ts` |
 | Tests de integración y de concurrencia de duties | `api/test/duties.e2e-spec.ts` |
 | Tests de edición y borrado de unidades, incluida la concurrencia | `api/test/units.e2e-spec.ts` |
@@ -923,6 +949,29 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   de la web, y `field-limits.e2e-spec.ts` para que la pregunta la responda una prueba.
   `[verificado-en-dispositivo]`
 
+### 17. Una consulta de disponibilidad aceptaba el fin antes que el inicio
+
+- **Qué falló:** `GET /units/availability` con el fin anterior al inicio respondía 200.
+- **Causa raíz:** para añadir el tope de 366 días, `UnitAvailabilityQueryDto` redeclaraba `endAt`
+  (heredado de un dto base) con una regla más. **class-validator descarta todas las reglas heredadas
+  de un campo en cuanto la subclase declara una del mismo tipo**, y casi todas son del tipo
+  "custom", así que `endAt` perdió formato, zona, longitud, años y orden.
+  `[verificado-contra-la-librería]` (`MetadataStorage.getTargetValidationMetadatas`). Los dtos de
+  crear y editar no fallaban por casualidad: heredaban sin redeclarar nada en la clase final.
+- **Cómo se detectó:** un test de integración ya existente empezó a fallar al añadir el tope.
+- **Solución:** se eliminó la herencia. Las reglas se agrupan en `time-window-rules.ts` y cada dto las
+  aplica a sus campos; `time-window-rules.spec.ts` comprueba las diez reglas en los tres dtos.
+  `[verificado-en-dispositivo]`
+
+### 18. Base de datos y api abiertas a la red local
+
+- **Qué falló:** los puertos 27018, 3000 y 5173 escuchaban en `0.0.0.0`. Con MongoDB sin contraseña,
+  cualquiera en la misma red podía leer o borrar la base.
+- **Causa raíz:** `'27018:27017'` en el compose publica en todas las interfaces; hay que indicar la IP.
+- **Cómo se detectó:** revisión de seguridad de la Fase 5, con `netstat` en el host.
+- **Solución:** `'127.0.0.1:…'` en los tres servicios. Verificado desde la IP de red del equipo.
+  `[verificado-en-dispositivo]`
+
 ---
 
 ## 9. Supuestos pendientes y riesgos conocidos
@@ -938,8 +987,12 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   `[verificado-en-dispositivo]` en Edge. **No probado en Firefox ni Safari**, ni en un móvil físico.
 - **Los campos de fecha siguen el idioma del navegador** (`mm/dd/yyyy` en un navegador en inglés).
   Es el comportamiento nativo de `datetime-local` y no se puede fijar desde la página.
-- **El aviso de éxito tras guardar una ruta viaja en el estado del historial**: si se recarga la
-  página de detalle justo después, vuelve a aparecer. Inofensivo. `[supuesto]`
+- **Sin límite de peticiones por cliente (rate limiting).** Junto con la falta de autenticación, es lo
+  primero que haría falta antes de exponer la api fuera de un equipo local. Hoy queda acotado por
+  publicar los puertos solo en `127.0.0.1`.
+- **`__proto__` y `constructor` en el cuerpo se aceptan sin error** (201): class-transformer los
+  descarta antes de validar, así que no llegan a la lista blanca, y no contaminan el prototipo.
+  `[verificado-en-dispositivo]` (prueba en `security.e2e-spec.ts`).
 - **El bundle de la interfaz pesa ~760 kB (230 kB comprimido)**, sobre todo por Leaflet y React.
   Vite avisa a partir de 500 kB. Aceptable para el MVP; se resolvería con carga diferida.
   `[verificado-en-dispositivo]`
@@ -987,14 +1040,15 @@ Prefijo global `/api`. Swagger en `/api/docs` y `/api/docs-json`. `[verificado-e
 | DELETE | `/units/:id` | 204, 400, 404, **409** | **Hecho** `[verificado-en-dispositivo]` (solo sin duties) |
 | POST | `/units` | 201, 400, 409 | **Hecho** `[verificado-en-dispositivo]` |
 | GET | `/units/availability` | 200, 400 | **Hecho** `[verificado-en-dispositivo]` (ayuda, no garantía) |
-| PUT | `/duties/:id` | 200, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
-| POST | `/duties` | 201, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
+| PUT | `/duties/:id` | 200, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503, con errores fabricados) |
+| POST | `/duties` | 201, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503, con errores fabricados) |
 | DELETE | `/duties/:id` | 204, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 
 **Formato de error uniforme** mediante filtro global: `{ statusCode, error, message, details? }`.
 Tipos de `error`: `ValidationError` (con `details`), `BadRequest` (petición ilegible, por ejemplo
 JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conflict` (solapamiento),
-`ScheduleBusy` (503, reintentos de transacción agotados), `UnitInUse` (409 al borrar una unidad
+`ScheduleBusy` (503, reintentos de transacción agotados), `UnsupportedMediaType` (415, cuerpo que no
+es JSON), `UnitInUse` (409 al borrar una unidad
 con duties; `details = { dutyCount, routes: [{ id, name, dutyCount }] }`), `PayloadTooLarge`, `InternalError`,
 `HttpError` (cualquier otro código ajeno). Mapeos obligatorios, cubiertos por tests y comprobados con
 `curl` contra la api en Docker `[verificado-en-dispositivo]`:
@@ -1039,4 +1093,4 @@ con duties; `details = { dutyCount, routes: [{ id, name, dutyCount }] }`), `Payl
 | 2 | Duties, regla de solapamiento, concurrencia | **Terminada** y verificada en Docker, con contraprueba |
 | 3 | Frontend completo | **Terminada** y verificada en tres anchos, con los flujos recorridos |
 | 4 | Swagger, vista previa de disponibilidad, edición de duty, trazado por calles | **Terminada**, con contraprueba de la edición |
-| 5 | Cierre y revisión | Pendiente |
+| 5 | Cierre, revisión de seguridad y de bugs, prueba desde clon limpio | **Terminada** |

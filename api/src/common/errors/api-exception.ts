@@ -13,6 +13,7 @@ export const API_ERROR_TYPES = {
   scheduleBusy: 'ScheduleBusy',
   unitInUse: 'UnitInUse',
   payloadTooLarge: 'PayloadTooLarge',
+  unsupportedMediaType: 'UnsupportedMediaType',
   internal: 'InternalError',
   http: 'HttpError',
 } as const;

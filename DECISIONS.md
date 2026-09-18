@@ -96,6 +96,8 @@ por qué me parecieron correctas:
 | Editar un duty con la misma transacción, bloqueando solo la unidad de destino y sin contar el propio duty | La unidad de origen solo pierde un duty y no puede quedar con un solapamiento; sin excluir el propio duty, acortar tu propio horario chocaría contigo mismo. |
 | Trazar la ruta por las calles con OSRM, llamado desde el navegador, solo en el detalle y con vuelta a la línea recta si falla | No pide clave ni cuenta, así que el proyecto sigue levantando sin configurar nada; la api no depende de un servicio externo; y pedir un trazado en cada clic del editor abusaría de un servidor público. |
 | Probar la lógica de la interfaz con el ejecutor de pruebas de Node en lugar de añadir Vitest a la web | Cubre la validación sin añadir dependencias. |
+| Agrupar las reglas de la ventana y aplicarlas en cada dto, en lugar de heredarlas | La herencia hacía perder reglas en silencio (un fin anterior al inicio se aceptaba en la disponibilidad). Una prueba comprueba ahora las diez reglas en los tres dtos. |
+| Publicar la base, la api y la interfaz solo en `127.0.0.1` | La base no tiene contraseña: abierta a la red, cualquiera en el mismo wifi podía leerla o borrarla. |
 | Documentar Swagger con anotaciones explícitas en lugar del plugin del CLI | Se ve qué se documenta sin conocer la magia del plugin, y los tests (que no pasan por el CLI) ven la misma documentación que producción. |
 | Instalar `procps` en la imagen y añadir `init: true` al contenedor | Resolvían la recarga en caliente y los procesos zombis (ver abajo). La IA no los aplicó hasta que los aprobé, porque eran dependencias nuevas. |
 
@@ -110,6 +112,10 @@ por qué me parecieron correctas:
   lo que se escribía. La IA auditó campo por campo y lo probó contra la api en lugar de responder de
   memoria. Ahora cada campo tiene su máximo en la api y en los formularios, y una prueba recorre
   todos los campos con un carácter de más.
+- **Una revisión de seguridad antes de entregar.** Pedí buscar bugs y vulnerabilidades en detalle.
+  Aparecieron dos importantes: la base de datos y la api estaban abiertas a toda la red local, y la
+  api aceptaba formularios, que otra web puede enviar sin pasar por CORS. Los dos están corregidos y
+  probados.
 - **Un aviso correcto pero inútil.** Vi que el formulario decía "el fin debe ser posterior al inicio"
   con un fin que parecía posterior. La IA encontró la causa: el año había quedado en 0026 al teclear
   "26". Le pedí que lo arreglara y que lo cubriera con una prueba. Ahora el aviso señala el año, la

@@ -8,9 +8,11 @@ import helmet from 'helmet';
 import { setupApiDocumentation } from './common/documentation/api-documentation.js';
 import { createValidationException } from './common/errors/validation-errors.js';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter.js';
+import { requireJsonBody } from './common/middleware/require-json-body.js';
 
 const GLOBAL_API_PREFIX = 'api';
 const MAX_REQUEST_BODY_SIZE = '256kb';
+const PRODUCTION_ENVIRONMENT = 'production';
 
 /** Aplica a la aplicación toda la configuración global de la api de Rumb@. */
 export function configureApp(app: NestExpressApplication): void {
@@ -18,6 +20,7 @@ export function configureApp(app: NestExpressApplication): void {
 
   app.setGlobalPrefix(GLOBAL_API_PREFIX);
   app.use(helmet());
+  app.use(requireJsonBody);
   app.useBodyParser('json', { limit: MAX_REQUEST_BODY_SIZE });
 
   app.enableCors({
@@ -37,5 +40,11 @@ export function configureApp(app: NestExpressApplication): void {
     }),
   );
   app.useGlobalFilters(new ApiExceptionFilter());
-  setupApiDocumentation(app);
+
+  // En producción no se publica la documentación: describir cada endpoint en abierto le ahorra
+  // trabajo de reconocimiento a quien quiera atacar la api.
+  const isProduction = configService.getOrThrow<string>('NODE_ENV') === PRODUCTION_ENVIRONMENT;
+  if (!isProduction) {
+    setupApiDocumentation(app);
+  }
 }

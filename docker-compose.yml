@@ -18,8 +18,11 @@ services:
     # mensajes de conexión abierta y cerrada. Lo que de verdad los redujo fue el
     # `directConnection=true` del healthcheck de abajo (ver CLAUDE.md, errores).
     command: ['mongod', '--replSet', 'rs0', '--bind_ip_all', '--quiet']
+    # Solo en 127.0.0.1: sin esa IP, Docker publica el puerto en TODAS las interfaces del equipo, y
+    # como la base no tiene contraseña, cualquiera en la misma red (un wifi público, la red de la
+    # oficina) podría leerla o borrarla.
     ports:
-      - '${MONGO_PORT:-27018}:27017'
+      - '127.0.0.1:${MONGO_PORT:-27018}:27017'
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -81,12 +84,13 @@ services:
       NODE_ENV: development
       API_PORT: 3000
       # `directConnection=true` evita que el driver intente descubrir la topología del
-      # replica set. Sin ella, el driver recibiria del servidor el nombre del miembro
-      # (`mongo:27017`) y lo usaria también desde el host, donde ese nombre no resuelve.
+      # replica set. Sin ella, el driver recibiría del servidor el nombre del miembro
+      # (`mongo:27017`) y lo usaría también desde el host, donde ese nombre no resuelve.
       MONGODB_URI: mongodb://mongo:27017/rumbo?directConnection=true
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    # Solo en 127.0.0.1, por la misma razón que mongo: la api no tiene autenticación.
     ports:
-      - '${API_PORT:-3000}:3000'
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     volumes:
       # El código fuente se monta para tener recarga en caliente, pero node_modules se
       # protege con un volumen propio: sin esto, la carpeta del host (vacía o compilada
@@ -139,8 +143,9 @@ services:
       # ocurre al arrancar el servidor, así que pasarla por entorno aquí funciona; si
       # algún día se construye para producción habrá que pasarla como argumento de build.
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+    # Solo en 127.0.0.1: la interfaz de desarrollo no debe quedar abierta a la red local.
     ports:
-      - '${WEB_PORT:-5173}:5173'
+      - '127.0.0.1:${WEB_PORT:-5173}:5173'
     volumes:
       - ./web:/app
       - /app/node_modules

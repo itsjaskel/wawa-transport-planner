@@ -1,6 +1,6 @@
 // Pantalla de detalle de una ruta: mapa y puntos, sus duties y el formulario para asignar uno nuevo.
-import { useCallback, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import type { Route } from '../api/types';
 import { ButtonLink } from '../components/Button';
@@ -116,8 +116,21 @@ function RouteDetail({
 export function RouteDetailPage() {
   const { routeId } = useParams<{ routeId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: route, isPending, isError, error } = useRoute(routeId);
-  const locationState = location.state as RouteDetailLocationState | null;
+  // El aviso de éxito se lee una sola vez, al llegar: se guarda aquí porque la ruta aún puede estar
+  // cargando cuando el historial ya se ha limpiado.
+  const [arrivalSuccessMessage] = useState<string | null>(() => {
+    const locationState = location.state as RouteDetailLocationState | null;
+    return locationState?.successMessage ?? null;
+  });
+
+  // Se borra el aviso del historial del navegador: si no, reaparecería al recargar la página.
+  useEffect(() => {
+    if (location.state !== null) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   if (isPending) {
     return <StatusMessage kind="loading" title="Cargando la ruta…" />;
@@ -133,11 +146,5 @@ export function RouteDetailPage() {
     );
   }
 
-  return (
-    <RouteDetail
-      key={route.id}
-      route={route}
-      initialSuccessMessage={locationState?.successMessage ?? null}
-    />
-  );
+  return <RouteDetail key={route.id} route={route} initialSuccessMessage={arrivalSuccessMessage} />;
 }

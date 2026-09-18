@@ -49,7 +49,7 @@ docker compose up --build -d
 | Qué | Dirección |
 |---|---|
 | Interfaz | http://localhost:5173 (abre el listado de rutas) |
-| Api | http://localhost:3000/api |
+| Api (por ejemplo, el listado de rutas) | http://localhost:3000/api/routes |
 | Documentación de la api (Swagger) | http://localhost:3000/api/docs |
 | Estado de la api | http://localhost:3000/api/health |
 
@@ -111,8 +111,8 @@ resolver problemas, ve a [Más instrucciones](#más-instrucciones).
 
 - **Lista de rutas** con su cantidad de puntos y cuándo se actualizó cada una.
 - **Detalle de una ruta:** el mapa con los puntos numerados en su orden y unidos **por las calles
-  reales**, con la distancia y el tiempo estimado en coche (*"9 km · 17 min"*), la lista de puntos, los duties asignados (unidad, inicio, fin y duración) y un formulario para asignar
-  uno nuevo. Si la unidad está ocupada, la pantalla lo explica en concreto: *"La unidad BUS-001 ya
+  reales**, con la distancia y el tiempo estimado en coche (*"9 km · 17 min"*), la lista de puntos,
+  los duties asignados (unidad, inicio, fin y duración) y un formulario para asignar uno nuevo. Si la unidad está ocupada, la pantalla lo explica en concreto: *"La unidad BUS-001 ya
   tiene un duty el 19 sep 2026, 04:00 – 08:00 (UTC−04:00) en la ruta Centro - Polanco"*, con un enlace
   a esa ruta.
 - **Qué unidad está libre.** Al asignar un duty, primero se elige el horario y el selector de
@@ -198,6 +198,15 @@ aunque la api corra en varias instancias.
   interfaz para explicar el conflicto. Un error inesperado nunca expone detalles internos.
 - Añadí cabeceras de seguridad, CORS limitado al origen de la interfaz y un límite de tamaño para las
   peticiones.
+- La api solo acepta cuerpos JSON. Un formulario enviado desde otra web se salta la comprobación de
+  CORS del navegador; un JSON, no.
+- La base de datos, la api y la interfaz **solo escuchan en este equipo** (`127.0.0.1`). Por defecto
+  Docker las abriría a toda la red local, y la base no tiene contraseña.
+- La documentación Swagger no se publica en producción.
+
+Antes de entregar hice una revisión de seguridad a propósito: probé inyección de operadores de MongoDB
+en el cuerpo, en la url y en la query, contaminación del prototipo, tipos de contenido falsos,
+cuerpos enormes y cabeceras. Lo que encontré está corregido y tiene su prueba.
 
 ### Documentación de la api
 
@@ -208,7 +217,7 @@ ve exactamente qué se documenta. Una prueba falla si algún endpoint se queda s
 
 ### Pruebas automatizadas
 
-La api tiene 33 pruebas unitarias y 65 de integración contra MongoDB real, incluidas las de
+La api tiene 74 pruebas unitarias y 78 de integración contra MongoDB real, incluidas las de
 concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
 
 La interfaz tiene 10 pruebas de su lógica pura (por ahora, la validación del horario de un duty), que
@@ -260,14 +269,16 @@ donde no conviene.
 - **Automatizaría las pruebas de extremo a extremo de la interfaz** (por ejemplo con Playwright) y
   montaría un pipeline de integración continua que ejecute todas las pruebas, incluida la contraprueba, en cada cambio.
 - **Probaría el caso límite de contención extrema:** si las transacciones agotan sus reintentos, la
-  api responde 503. Ese camino está programado y contrastado con el código del driver de MongoDB, pero
-  no lo he provocado en una prueba.
+  api responde 503. La traducción a 503 está probada con errores iguales a los del driver de MongoDB,
+  pero no he provocado de verdad 120 segundos de contención.
 - **Usaría un servidor de trazado propio o un proveedor con contrato.** Hoy el trazado lo pide el
   navegador al servidor público de demostración de OSRM: no tiene garantías de disponibilidad y recibe
   las coordenadas de las rutas. Si falla, el mapa vuelve a la línea recta y lo dice, así que el núcleo
   no depende de él.
 - **Avisaría si un duty es más corto que el recorrido:** con el tiempo estimado por calles, la interfaz
   podría advertir cuando la ventana asignada no alcanza para recorrer la ruta.
+- **Añadiría autenticación y límite de peticiones** antes de exponer la api fuera de un equipo local.
+  Hoy la protege que solo escucha en `localhost`.
 - **Guardaría una auditoría de cambios:** quién asignó o borró cada duty y cuándo.
 - **Dividiría el código de la interfaz en partes que se carguen por separado.** Hoy el mapa y React
   van en un solo archivo de unos 760 kB (230 kB comprimido); para un MVP es aceptable.
@@ -348,6 +359,9 @@ contraseña: en local la base corre sin autenticación a propósito.
 ```
 mongodb://localhost:27018/rumbo?directConnection=true
 ```
+
+Solo se puede conectar **desde este mismo equipo**: la base escucha únicamente en `localhost`, así
+que desde otro equipo de la red no hay acceso. Es a propósito, porque la base no tiene contraseña.
 
 Ojo con dos detalles:
 
