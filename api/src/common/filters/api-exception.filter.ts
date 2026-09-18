@@ -117,7 +117,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
   }
 
   /** Traduce un valor que Mongoose no pudo convertir (normalmente un id mal formado) a 400. */
-  private buildCastErrorBody(exception: InstanceType<typeof mongoose.Error.CastError>): ApiErrorBody {
+  private buildCastErrorBody(
+    exception: InstanceType<typeof mongoose.Error.CastError>,
+  ): ApiErrorBody {
     return {
       statusCode: HttpStatus.BAD_REQUEST,
       error: API_ERROR_TYPES.invalidId,
@@ -175,7 +177,9 @@ function isBodyParserError(exception: unknown): exception is BodyParserError {
   // body-parser marca todos sus errores con un `type` que empieza por "entity."
   // (`entity.too.large`, `entity.parse.failed`...).
   const hasBodyParserType =
-    'type' in exception && typeof exception.type === 'string' && exception.type.startsWith('entity.');
+    'type' in exception &&
+    typeof exception.type === 'string' &&
+    exception.type.startsWith('entity.');
 
   return hasHttpStatus && hasBodyParserType;
 }

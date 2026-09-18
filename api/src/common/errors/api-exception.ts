@@ -10,6 +10,7 @@ export const API_ERROR_TYPES = {
   notFound: 'NotFound',
   duplicateKey: 'DuplicateKey',
   conflict: 'Conflict',
+  scheduleBusy: 'ScheduleBusy',
   payloadTooLarge: 'PayloadTooLarge',
   internal: 'InternalError',
   http: 'HttpError',

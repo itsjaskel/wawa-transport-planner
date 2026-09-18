@@ -114,6 +114,18 @@ con `error TS5011`. Por eso `api/tsconfig.build.json` lo declara explícitamente
   validaciones que un usuario real y no duplica la definición de los esquemas, que es la principal
   fuente de deriva entre el seed y el modelo. Se ejecuta como servicio efímero que depende de que la
   api esté sana.
+- **El agente redacta y mantiene `README.md` y `DECISIONS.md`.** Decisión del responsable durante
+  el proyecto, que sustituye la regla inicial de no escribirlos. Reglas:
+  - Se actualizan **en la misma tarea** en que cambie algo que describen (un comando, el estado de
+    una fase, una decisión nueva).
+  - El README **solo afirma lo que existe**: la tabla "Estado actual" debe reflejar la verdad, y
+    todo comando que aparezca en él se ejecuta antes de escribirlo.
+  - El tono del README es **ligeramente coloquial** (decisión del responsable): cercano, pero sin
+    perder precisión.
+  - En `DECISIONS.md` solo se registra lo que se puede atribuir con pruebas: el documento de
+    requisitos del responsable, este archivo y lo decidido en conversación. No se inventan
+    correcciones ni rechazos.
+  - El responsable revisa ambos antes de entregarlos: los va a defender en la entrevista.
 - **Los scripts auxiliares se ejecutan en TypeScript sin compilar.** Node 24 ejecuta archivos `.ts`
   de forma nativa, sin flags. Limitación: el borrado de tipos no admite `enum`, `namespace` ni
   propiedades de parámetro en constructores, así que esos scripts se escriben sin esas construcciones.
@@ -123,7 +135,8 @@ con `error TS5011`. Por eso `api/tsconfig.build.json` lo declara explícitamente
 
 ## 4. Concurrencia: la parte más importante
 
-> Todavía **no implementado**. Llega en la Fase 2. Esta sección fija el diseño acordado.
+> **Implementado en la Fase 2** en `api/src/duties/duties.service.ts` y verificado contra MongoDB
+> real, incluida la contraprueba. `[verificado-en-dispositivo]`
 
 ### La regla
 
@@ -137,6 +150,11 @@ Intervalos **semiabiertos**: incluyen el inicio y excluyen el fin. Dos duties qu
 extremo (uno termina a las 10:00 y el siguiente empieza a las 10:00) **no** se solapan. La condición
 vive en una función pura sin dependencias de Nest ni de Mongo, y **la consulta a la base replica
 exactamente esa condición**, porque en ejecución se usa la consulta, no la función.
+
+Las dos viven juntas en `api/src/duties/domain/overlap.ts` (`hasOverlap` y `buildOverlapFilter`), y la
+tabla de 9 casos está en `overlap-cases.ts`, compartida por el test unitario y el de integración, para
+que la consulta real se pruebe con exactamente los mismos casos que la función.
+`[verificado-en-dispositivo]`
 
 ### Por qué no basta con validar antes de insertar
 
@@ -187,6 +205,13 @@ relajar la desconfianza justo donde hace falta. Media defensa es peor que ningun
 - `withTransaction` reintenta **por ventana de tiempo (120 s por defecto), no por número de intentos**.
   El error de "reintentos agotados" es en la práctica un vencimiento. `[verificado-contra-la-librería]`
 - El conflicto de negocio **no** es transitorio: se propaga como 409, no se reintenta.
+- Si `withTransaction` agota su ventana, propaga el último error **con sus etiquetas**
+  (`TransientTransactionError` o `UnknownTransactionCommitResult`); solo lo envuelve en
+  `MongoOperationTimeoutError` si se configura `timeoutMS`. El servicio reconoce ambas formas y
+  responde **503 `ScheduleBusy`**. En el driver 7.6.0 hay además espera creciente entre reintentos.
+  `[verificado-contra-la-librería]`. El 503 en sí **no se ha provocado nunca**: `[compila]`.
+- **El borrado no bloquea la unidad.** Borrar no puede crear solapamientos; en el peor caso una
+  creación simultánea todavía ve el duty que se borra y responde 409 de más, que es el error seguro.
 
 ### Estado verificado del soporte de transacciones
 
@@ -202,6 +227,12 @@ determinista**: depende del azar de la temporización. La contraprueba se ejecut
 seguidas** y se reportan las tres salidas tal cual. Se descartó introducir una pausa artificial para
 forzar la ventana de carrera: demostraría que un sistema con una pausa metida a mano falla, no que
 el sistema real falle.
+
+**Resultado de la Fase 2** `[verificado-en-dispositivo]`: se sustituyó el `$inc` por un `findById` con
+sesión (conserva el 404 y solo quita el bloqueo). Las tres ejecuciones fallaron igual:
+`expected { '201': 3, '409': 7 } to deeply equal { '201': 1, '409': 9 }`, es decir, **tres duties
+solapados en la misma unidad**. El test sin solapamiento siguió pasando, como debe. Con el `$inc`
+restaurado (comprobado byte a byte contra la copia) el test pasó en 5 de 5 ejecuciones seguidas.
 
 ---
 
@@ -245,12 +276,22 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 ### Tests dentro del contenedor
 
 ```bash
-docker compose exec api npm test          # unitarios (15 tests, verdes en Fase 1)
-docker compose exec api npm run test:e2e  # integración contra la base real
+docker compose exec api npm test                   # unitarios (33 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (22 tests)
+docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
 
-Los tests de integración usarán una base separada (`rumbo_test`) sobre el mismo replica set, para no
-destruir los datos del seed entre demostraciones. Se implementa en la Fase 2. `[supuesto]`
+Los tests de integración levantan la app completa dentro del proceso (misma configuración vía
+`configureApp`) y le hacen peticiones HTTP reales con `supertest` contra la base **`rumbo_test`**,
+que **borran entera** al empezar; se niegan a correr si la base no se llama así. Los datos de la demo
+(`rumbo`) no se tocan. `[verificado-en-dispositivo]`
+
+Trampa: `ConfigModule.forRoot` lee el entorno **al importar** `AppModule` (se evalúa en el
+decorador). Por eso el test cambia `MONGODB_URI` y después importa `AppModule` de forma dinámica.
+`[verificado-en-dispositivo]`
+
+La demo usa la unidad `BUS-003` (el seed la deja sin duties a propósito) en una ventana aleatoria
+del próximo año, y termina con código 1 si se crea más de un duty.
 
 ### Conectarse a la base desde el host
 
@@ -262,6 +303,15 @@ mongodb://localhost:27018/rumbo?directConnection=true
 topología del replica set, recibiría del servidor el nombre del miembro (`mongo:27017`) e intentaría
 resolverlo desde Windows, donde ese nombre no existe.
 
+### Detener
+
+```bash
+docker compose down      # conserva los datos
+```
+
+`[verificado-en-dispositivo]`: tras `down` y `up -d`, la api estuvo sana en 24 s y las 3 unidades
+seguían ahí.
+
 ### Reiniciar desde cero
 
 ```bash
@@ -270,7 +320,9 @@ docker compose up --build
 ```
 
 `mongo-init` y `seed` son **idempotentes**: se pueden volver a ejecutar sin efectos adversos.
-`[verificado-en-dispositivo]`
+`[verificado-en-dispositivo]`. Los duties del seed se crean para **mañana (UTC)**: repetirlo el mismo
+día no duplica (cada duty choca consigo mismo con 409), pero repetirlo otro día añade los del nuevo
+"mañana".
 
 ---
 
@@ -386,6 +438,15 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   (test unitario).
 - **Actualizaciones:** siempre con `runValidators: true`; sin esa opción Mongoose no valida el esquema
   en `findByIdAndUpdate`.
+- **Fechas en la api:** ISO 8601 **con zona obligatoria** (`Z` o `±hh:mm`); sin zona, 400. Se guardan
+  como `Date` y se devuelven en UTC con `Z`.
+- **Datos relacionados en la respuesta:** con un campo virtual poblado (`unit` en el duty), no
+  poblando el propio campo de referencia: `unitId` sigue siendo el id. Requiere `virtuals: true` en
+  el `toJSON` del esquema.
+- **Configuración global de la app** en `configureApp` (`app.setup.ts`), compartida por `main.ts` y
+  los tests de integración. Cualquier ajuste global nuevo va ahí, no en `main.ts`.
+- **Prettier:** `npx prettier --check --end-of-line auto "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"`.
+  El `--end-of-line auto` es necesario en esta máquina (ver error 11).
 
 ### Convención de imports de Mongoose (importante)
 
@@ -413,6 +474,8 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Concepto | Archivo |
 |---|---|
 | Memoria del proyecto (este archivo) | `CLAUDE.md` |
+| README de producto e instrucciones de uso | `README.md` |
+| Bitácora de decisiones (quién decidió qué) | `DECISIONS.md` |
 | Instrucciones para agentes | `AGENTS.md` |
 | Orquestación del entorno completo | `docker-compose.yml` |
 | Inicialización idempotente del replica set | `docker/mongo-init.js` |
@@ -420,7 +483,8 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Imagen multietapa de la api | `api/Dockerfile` |
 | Imagen del servidor de desarrollo de la web | `web/Dockerfile` |
 | Sondeo del observador de archivos de la api | `api/tsconfig.json` (`watchOptions`) |
-| Punto de entrada de la api, configuración global | `api/src/main.ts` |
+| Punto de entrada de la api | `api/src/main.ts` |
+| Configuración global de la app (compartida con los tests) | `api/src/app.setup.ts` |
 | Módulo raíz, conexión a MongoDB | `api/src/app.module.ts` |
 | Validación de variables de entorno al arrancar | `api/src/config/env.validation.ts` |
 | Endpoint de salud y comprobación del replica set | `api/src/health/health.controller.ts` |
@@ -437,6 +501,14 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Esquema de ruta y puntos embebidos, límites | `api/src/routes/schemas/route.schema.ts` |
 | Validación de crear y reemplazar ruta | `api/src/routes/dto/save-route.dto.ts` |
 | Endpoints y lógica de rutas | `api/src/routes/routes.controller.ts`, `api/src/routes/routes.service.ts` |
+| Regla de solapamiento (función pura y filtro de Mongo) | `api/src/duties/domain/overlap.ts` |
+| Tabla de 9 casos de solapamiento, compartida por los tests | `api/src/duties/domain/overlap-cases.ts` |
+| Esquema del duty, validación de ventana, índices, virtual `unit` | `api/src/duties/schemas/duty.schema.ts` |
+| Validación de la creación de duty (fechas con zona) | `api/src/duties/dto/create-duty.dto.ts` |
+| Transacción, bloqueo de la unidad (`$inc`), 409 y 503 | `api/src/duties/duties.service.ts` |
+| Endpoints de duties, incluido `GET /routes/:id/duties` | `api/src/duties/duties.controller.ts` |
+| Tests de integración y de concurrencia | `api/test/duties.e2e-spec.ts` |
+| Demo de concurrencia por HTTP | `api/scripts/concurrency-demo.ts` |
 | Punto de entrada del frontend, TanStack Query | `web/src/main.tsx` |
 | Armazón de la interfaz | `web/src/App.tsx` |
 | Cliente HTTP único y `ApiError` | `web/src/api/client.ts` |
@@ -449,9 +521,6 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 
 | Concepto | Archivo previsto | Fase |
 |---|---|---|
-| Regla de solapamiento de ventanas (función pura) | `api/src/duties/domain/overlap.ts` | 2 |
-| Bloqueo de la unidad en la transacción | `api/src/duties/duties.service.ts` | 2 |
-| Script de demostración de concurrencia por HTTP | `api/scripts/concurrency-demo.ts` | 2 |
 | Hoja global de estilos de Leaflet | `web/src/styles/leaflet-overrides.css` | 3 |
 
 ---
@@ -600,6 +669,18 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   usó `Acquire::Check-Date=false` en apt: desactivaría una comprobación de seguridad para tapar un
   problema de la máquina. `[verificado-en-dispositivo]`
 
+### 11. Prettier marcaba como mal formateados archivos que no se habían tocado
+
+- **Qué falló:** `prettier --check` señalaba archivos de la Fase 0 sin cambios.
+- **Causa raíz:** con `core.autocrlf=true`, git saca los archivos del repositorio con fin de línea
+  CRLF, y Prettier exige LF por defecto. En el repositorio están bien (LF). Los archivos escritos
+  después por las herramientas quedan en LF, así que el árbol de trabajo mezcla ambos.
+- **Cómo se detectó:** comparando byte a byte un archivo con la salida de Prettier (`od -c`): la
+  única diferencia era `\r\n` frente a `\n`. Una comprobación previa con `grep $'\r'` en Git Bash
+  había dicho "LF" erróneamente: no es fiable para esto.
+- **Solución:** comprobar con `--end-of-line auto`. Con eso, los problemas reales eran 5 archivos
+  propios con líneas de más de 100 caracteres, ya formateados. `[verificado-en-dispositivo]`
+
 ---
 
 ## 9. Supuestos pendientes y riesgos conocidos
@@ -625,6 +706,10 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   devuelven a la vez los cuatro mensajes del campo ("debe ser texto", "es obligatorio"…). Es correcto,
   pero ruidoso; se podría cortar en el primer fallo con `stopAtFirstError`. No se ha cambiado.
   `[verificado-en-dispositivo]`
+- **`overlap-cases.ts` es dato de test dentro de `src/`** y por tanto se compila en `dist/`. Está ahí
+  porque lo comparten el test unitario (en `src/`) y el de integración (en `test/`). Inofensivo.
+- **Duties de una ruta sin paginación.** `GET /routes/:id/duties` devuelve todos. Suficiente para el
+  MVP. `[supuesto]`
 - **Lecturas de duties solo por ruta.** `GET /routes/:id/duties` es la única lectura prevista; no hay
   forma de preguntar "qué tiene asignado esta unidad". Hueco conocido y aceptado para el MVP.
 
@@ -641,18 +726,18 @@ Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
 | GET | `/routes/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 | POST | `/routes` | 201, 400 | **Hecho** `[verificado-en-dispositivo]` |
 | PUT | `/routes/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
-| GET | `/routes/:id/duties` | 200, 404 | Fase 2 |
+| GET | `/routes/:id/duties` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 | GET | `/units` | 200 | **Hecho** `[verificado-en-dispositivo]` |
 | POST | `/units` | 201, 400, 409 | **Hecho** `[verificado-en-dispositivo]` |
-| POST | `/duties` | 201, 400, 404, **409** | Fase 2 |
-| DELETE | `/duties/:id` | 204, 404 | Fase 2 |
+| POST | `/duties` | 201, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
+| DELETE | `/duties/:id` | 204, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 
 **Formato de error uniforme** mediante filtro global: `{ statusCode, error, message, details? }`.
 Tipos de `error`: `ValidationError` (con `details`), `BadRequest` (petición ilegible, por ejemplo
-JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conflict`,
-`PayloadTooLarge`, `InternalError`, `HttpError` (cualquier otro código ajeno). Mapeos obligatorios,
-cubiertos por `api-exception.filter.spec.ts` y comprobados con `curl` contra la api en Docker
-`[verificado-en-dispositivo]` (salvo el 409 de solapamiento, que llega en la Fase 2):
+JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conflict` (solapamiento),
+`ScheduleBusy` (503, reintentos de transacción agotados), `PayloadTooLarge`, `InternalError`,
+`HttpError` (cualquier otro código ajeno). Mapeos obligatorios, cubiertos por tests y comprobados con
+`curl` contra la api en Docker `[verificado-en-dispositivo]`:
 
 | Situación | Respuesta |
 |---|---|
@@ -669,6 +754,13 @@ cubiertos por `api-exception.filter.spec.ts` y comprobados con `curl` contra la 
 - Un `PUT` actualiza `updatedAt` y conserva `createdAt`. El nombre se recorta y un nombre de punto
   vacío o de solo espacios desaparece de la respuesta.
 - `GET/POST/PUT /routes…`: `{ id, name, points: [{ lat, lng, name? }], createdAt, updatedAt }`.
+- `POST /duties` recibe `{ routeId, unitId, startAt, endAt }` y devuelve
+  `{ id, routeId, unitId, startAt, endAt, createdAt, updatedAt }`.
+- `GET /routes/:id/duties`: la misma forma más `unit: { id, code, name }`, ordenado por `startAt`.
+- El 409 de solapamiento lleva `details.conflictingDuty = { id, routeId, routeName, unitCode, startAt,
+  endAt }`, suficiente para que la interfaz escriba "La unidad BUS-001 ya tiene un duty de 08:00 a
+  12:00 en la ruta Centro - Polanco" sin otra consulta. El `message` no incluye horas porque el
+  servidor no conoce la zona horaria del usuario.
 - `GET/POST /units`: `{ id, code, name, createdAt, updatedAt }`, ordenado por `code`. `code` se guarda
   en mayúsculas y solo admite letras, dígitos y guiones; `bus-001` choca con `BUS-001` (409).
   `scheduleVersion` se guarda como `0` y nunca aparece en las respuestas. `[verificado-en-dispositivo]`
@@ -682,7 +774,7 @@ cubiertos por `api-exception.filter.spec.ts` y comprobados con `curl` contra la 
 |---|---|---|
 | 0 | Entorno dockerizado, salud, memoria del proyecto | **Terminada** |
 | 1 | Rutas y unidades, filtro de errores, seed | **Terminada** y verificada en Docker |
-| 2 | Duties, regla de solapamiento, concurrencia | Pendiente |
+| 2 | Duties, regla de solapamiento, concurrencia | **Terminada** y verificada en Docker, con contraprueba |
 | 3 | Frontend completo | Pendiente |
 | 4 | Swagger, vista previa de conflictos, edición de duty | Opcional |
 | 5 | Cierre y revisión | Pendiente |

@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { validateEnvironment } from './config/env.validation.js';
+import { DutiesModule } from './duties/duties.module.js';
 import { HealthModule } from './health/health.module.js';
 import { RoutesModule } from './routes/routes.module.js';
 import { UnitsModule } from './units/units.module.js';
@@ -24,6 +25,7 @@ import { UnitsModule } from './units/units.module.js';
     HealthModule,
     RoutesModule,
     UnitsModule,
+    DutiesModule,
   ],
 })
 export class AppModule {}

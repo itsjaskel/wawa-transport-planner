@@ -11,7 +11,9 @@ describe('flattenValidationErrors', () => {
         children: [
           {
             property: '3',
-            children: [{ property: 'lat', constraints: { max: 'La latitud debe estar entre -90 y 90.' } }],
+            children: [
+              { property: 'lat', constraints: { max: 'La latitud debe estar entre -90 y 90.' } },
+            ],
           },
         ],
       },

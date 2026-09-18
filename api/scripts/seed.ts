@@ -26,7 +26,21 @@ interface SeedRoute {
 }
 
 interface RouteSummary {
+  id: string;
   name: string;
+}
+
+interface UnitSummary {
+  id: string;
+  code: string;
+}
+
+/** Duty de ejemplo: unidad y ruta por su nombre legible, y horas UTC del día siguiente. */
+interface SeedDuty {
+  unitCode: string;
+  routeName: string;
+  startHourUtc: number;
+  endHourUtc: number;
 }
 
 const SEED_UNITS: SeedUnit[] = [
@@ -56,6 +70,14 @@ const SEED_ROUTES: SeedRoute[] = [
       { lat: 19.332, lng: -99.187, name: 'Ciudad Universitaria' },
     ],
   },
+];
+
+// Duties para mañana (UTC). BUS-003 queda libre a propósito: es la unidad de la demo de
+// concurrencia. Al repetir el seed el mismo día, cada duty choca consigo mismo (409) y no se duplica.
+const SEED_DUTIES: SeedDuty[] = [
+  { unitCode: 'BUS-001', routeName: 'Centro - Polanco', startHourUtc: 8, endHourUtc: 12 },
+  { unitCode: 'BUS-001', routeName: 'Insurgentes Sur', startHourUtc: 13, endHourUtc: 17 },
+  { unitCode: 'BUS-002', routeName: 'Insurgentes Sur', startHourUtc: 9, endHourUtc: 13 },
 ];
 
 /** Envía un JSON a la api con el método indicado y devuelve la respuesta sin interpretarla. */
@@ -118,12 +140,65 @@ async function seedRoutes(): Promise<void> {
   }
 }
 
-/** Carga las unidades y rutas de ejemplo; es idempotente y se puede repetir sin duplicar. */
+/** Pide un listado a la api y devuelve su cuerpo; falla si la respuesta no es correcta. */
+async function fetchList<T>(path: string): Promise<T[]> {
+  const response = await fetch(`${API_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error(`No se pudo leer ${path}: ${await response.text()}`);
+  }
+  return (await response.json()) as T[];
+}
+
+/** Devuelve la fecha de mañana a la hora UTC indicada, en ISO 8601 con zona. */
+function buildTomorrowAtUtcHour(hourUtc: number): string {
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(hourUtc, 0, 0, 0);
+  return tomorrow.toISOString();
+}
+
+/** Crea los duties de ejemplo; un 409 significa que ya existía ese mismo duty y no es un error. */
+async function seedDuties(): Promise<void> {
+  const units = await fetchList<UnitSummary>('/units');
+  const routes = await fetchList<RouteSummary>('/routes');
+
+  for (const seedDuty of SEED_DUTIES) {
+    const unit = units.find((candidate) => candidate.code === seedDuty.unitCode);
+    const route = routes.find((candidate) => candidate.name === seedDuty.routeName);
+
+    if (!unit || !route) {
+      throw new Error(`Falta la unidad ${seedDuty.unitCode} o la ruta "${seedDuty.routeName}".`);
+    }
+
+    const dutyLabel = `${seedDuty.unitCode} en "${seedDuty.routeName}" de ${seedDuty.startHourUtc}:00 a ${seedDuty.endHourUtc}:00 UTC`;
+    const response = await sendJson('POST', '/duties', {
+      unitId: unit.id,
+      routeId: route.id,
+      startAt: buildTomorrowAtUtcHour(seedDuty.startHourUtc),
+      endAt: buildTomorrowAtUtcHour(seedDuty.endHourUtc),
+    });
+
+    if (response.status === HTTP_STATUS_CREATED) {
+      console.log(`[seed] duty ${dutyLabel} creado`);
+      continue;
+    }
+
+    if (response.status === HTTP_STATUS_CONFLICT) {
+      console.log(`[seed] duty ${dutyLabel} ya existía`);
+      continue;
+    }
+
+    throw new Error(`No se pudo crear el duty ${dutyLabel}: ${await response.text()}`);
+  }
+}
+
+/** Carga las unidades, rutas y duties de ejemplo; es idempotente y se puede repetir sin duplicar. */
 async function seed(): Promise<void> {
   console.log(`[seed] apuntando a ${API_URL}`);
   await seedUnits();
   await seedRoutes();
-  // Los duties de ejemplo llegan en la Fase 2, cuando exista el endpoint.
+  await seedDuties();
   console.log('[seed] terminado');
 }
 
