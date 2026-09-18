@@ -6,7 +6,75 @@ alta **rutas** (listas ordenadas de puntos en el mapa) y **unidades** (vehículo
 sostiene todo es que **una misma unidad nunca puede estar en dos duties a la vez**, ni siquiera
 cuando dos personas intentan asignarla en el mismo instante.
 
-Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo-usar-este-proyecto).
+## Cómo ponerla en marcha
+
+Todo corre en Docker, así que **no necesitas instalar Node ni MongoDB, ni crear ningún archivo
+`.env`.**
+
+### 1. Requisitos
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (o Docker Engine con el plugin
+  Compose) en marcha.
+- Los puertos **5173**, **3000** y **27018** libres en tu máquina.
+
+### 2. Iniciar la aplicación
+
+Desde la carpeta raíz del proyecto:
+
+```bash
+docker compose up --build
+```
+
+La primera vez tarda unos minutos porque construye las imágenes; las siguientes, unos 20-30
+segundos. El entorno arranca en este orden, y cada paso espera a que el anterior esté listo:
+
+1. `mongo`: la base de datos.
+2. `mongo-init`: prepara la base para admitir transacciones y termina.
+3. `api`: el servidor.
+4. `seed`: carga datos de ejemplo (3 unidades, 2 rutas de Ciudad de México y 3 duties para mañana)
+   y termina. Si ya existen, no los duplica.
+5. `web`: la interfaz.
+
+No te asustes si `mongo-init` y `seed` aparecen como terminados (`Exited (0)`): son tareas de un
+solo uso y ese es su final feliz.
+
+Si prefieres recuperar la terminal, arráncalo en segundo plano:
+
+```bash
+docker compose up --build -d
+```
+
+### 3. Abrir la aplicación
+
+| Qué | Dirección |
+|---|---|
+| Interfaz | http://localhost:5173 (abre el listado de rutas) |
+| Api | http://localhost:3000/api |
+| Documentación de la api (Swagger) | http://localhost:3000/api/docs |
+| Estado de la api | http://localhost:3000/api/health |
+
+La aplicación está lista cuando el estado de la api responde:
+
+```json
+{"status":"ok","database":{"isConnected":true,"name":"rumbo","replicaSetName":"rs0"}}
+```
+
+Si `replicaSetName` sale `null`, la base no admite transacciones y la protección contra duties
+solapados no funcionaría: reinicia desde cero (ver [Más instrucciones](#más-instrucciones)).
+
+### 4. Detener la aplicación
+
+Si la arrancaste en primer plano, pulsa `Ctrl + C` y después:
+
+```bash
+docker compose down
+```
+
+`docker compose down` apaga y elimina los contenedores, pero **conserva los datos**: cuando vuelvas
+a iniciar, seguirán ahí.
+
+Para ejecutar las pruebas, ver la demostración de concurrencia, conectarte a la base de datos o
+resolver problemas, ve a [Más instrucciones](#más-instrucciones).
 
 ## Estado actual
 
@@ -117,6 +185,10 @@ aunque la api corra en varias instancias.
   cantidad de puntos, fin posterior al inicio. Repito las mismas reglas en el esquema de la base,
   para que ninguna escritura que no pase por la api deje datos inválidos.
 - Rechazo los campos no declarados, lo que impide colar operadores de MongoDB en el cuerpo.
+- Un duty no puede empezar en el pasado: el inicio debe ser del minuto actual o posterior, al crear
+  y al editar. Consultar la disponibilidad de un horario pasado sí se permite, porque no crea nada.
+- Rechazo años fuera de 2000–2100. Un campo de fecha a medio escribir deja años como 0026, y sin
+  este límite ese duty se guardaría en el año 26.
 - Exijo las fechas **con zona horaria**. Sin ella, `2030-03-15T08:00` se interpretaría en la hora
   del servidor y el duty quedaría movido de hora sin que nadie se diera cuenta.
 - Todos los errores salen con el mismo formato, en español y diciendo qué campo falló. El 409 de
@@ -134,11 +206,12 @@ ve exactamente qué se documenta. Una prueba falla si algún endpoint se queda s
 
 ### Pruebas automatizadas
 
-La api tiene 33 pruebas unitarias y 50 de integración contra MongoDB real, incluidas las de
+La api tiene 33 pruebas unitarias y 56 de integración contra MongoDB real, incluidas las de
 concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
 
-La interfaz no tiene pruebas automatizadas (lo explico abajo). La recorrí con clics reales en un
-navegador: crear una ruta desde el mapa, reordenar sus puntos, provocar el conflicto de horario,
+La interfaz tiene 10 pruebas de su lógica pura (por ahora, la validación del horario de un duty), que
+corren con el ejecutor de pruebas que ya trae Node, sin añadir dependencias. Las pantallas no tienen
+pruebas automatizadas (lo explico abajo): las recorrí con clics reales en un navegador: crear una ruta desde el mapa, reordenar sus puntos, provocar el conflicto de horario,
 borrar un duty y repetir un código de unidad, comprobando cada resultado contra la api.
 
 ## Por qué MongoDB
@@ -170,7 +243,7 @@ donde no conviene.
 | Duties recurrentes (todos los lunes…) | Los duties son fechas absolutas. Los recurrentes cambian por completo el modelo de la regla. |
 | GraphQL y Prisma | No resuelven ningún problema de este MVP y añadirían una capa más que mantener. |
 | Trazado por calles en el editor de rutas | El detalle de una ruta la dibuja por las calles con OSRM, un servicio abierto sin clave ni cuenta. En el editor sigue en línea recta: pedir un trazado en cada clic abusaría de un servidor público de demostración. |
-| Pruebas automatizadas de la interfaz | El brief pone el foco en la lógica crítica, que está en la api y está cubierta. Para la interfaz habría que añadir herramientas nuevas; preferí recorrer los flujos a mano en un navegador. |
+| Pruebas automatizadas de las pantallas | La lógica crítica está en la api y está cubierta, y la lógica pura de la interfaz se prueba con Node. Probar las pantallas en sí exige herramientas nuevas; preferí recorrer los flujos en un navegador. |
 | Mostrar las horas en la zona de la flota | Muestro cada hora en la zona de quien mira, con su desfase UTC visible. Si la flota operara siempre en una zona concreta, convendría mostrar todo en esa zona; es una constante de configuración que no añadí sin saberlo. |
 | Paginación | Con los volúmenes de un MVP no hace falta. |
 | Despliegue en producción | El entorno está pensado para desarrollo y evaluación local. La api tiene una etapa de producción en su `Dockerfile`, pero no se ha probado; la interfaz no la tiene. |
@@ -197,72 +270,7 @@ donde no conviene.
 - **Dividiría el código de la interfaz en partes que se carguen por separado.** Hoy el mapa y React
   van en un solo archivo de unos 760 kB (230 kB comprimido); para un MVP es aceptable.
 
-## Cómo usar este proyecto
-
-Todo corre en Docker, así que **no necesitas instalar Node ni MongoDB, ni crear ningún archivo
-`.env`.**
-
-### Requisitos
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (o Docker Engine con el plugin
-  Compose) en marcha.
-- Los puertos **5173**, **3000** y **27018** libres en tu máquina.
-
-### Iniciar la aplicación
-
-Desde la carpeta raíz del proyecto:
-
-```bash
-docker compose up --build
-```
-
-La primera vez tarda unos minutos porque construye las imágenes; las siguientes, unos 20-30
-segundos. El entorno arranca en este orden, y cada paso espera a que el anterior esté listo:
-
-1. `mongo`: la base de datos.
-2. `mongo-init`: prepara la base para admitir transacciones y termina.
-3. `api`: el servidor.
-4. `seed`: carga datos de ejemplo (3 unidades, 2 rutas de Ciudad de México y 3 duties para mañana)
-   y termina. Si ya existen, no los duplica.
-5. `web`: la interfaz.
-
-No te asustes si `mongo-init` y `seed` aparecen como terminados (`Exited (0)`): son tareas de un
-solo uso y ese es su final feliz.
-
-Si prefieres recuperar la terminal, arráncalo en segundo plano:
-
-```bash
-docker compose up --build -d
-```
-
-### Abrir la aplicación
-
-| Qué | Dirección |
-|---|---|
-| Interfaz | http://localhost:5173 (abre el listado de rutas) |
-| Api | http://localhost:3000/api |
-| Documentación de la api (Swagger) | http://localhost:3000/api/docs |
-| Estado de la api | http://localhost:3000/api/health |
-
-La aplicación está lista cuando el estado de la api responde:
-
-```json
-{"status":"ok","database":{"isConnected":true,"name":"rumbo","replicaSetName":"rs0"}}
-```
-
-Si `replicaSetName` sale `null`, la base no admite transacciones y la protección contra duties
-solapados no funcionaría: reinicia desde cero (ver más abajo).
-
-### Detener la aplicación
-
-Si la arrancaste en primer plano, pulsa `Ctrl + C` y después:
-
-```bash
-docker compose down
-```
-
-`docker compose down` apaga y elimina los contenedores, pero **conserva los datos**: cuando vuelvas
-a iniciar, seguirán ahí.
+## Más instrucciones
 
 ### Reiniciar desde cero
 
@@ -286,6 +294,9 @@ docker compose exec api npm test
 # Pruebas de integración: la api completa contra una base de datos real,
 # incluida la prueba de peticiones simultáneas sobre la misma unidad.
 docker compose exec api npm run test:e2e
+
+# Pruebas de la lógica de la interfaz (por ejemplo, la validación del horario de un duty).
+docker compose exec web npm test
 ```
 
 Las pruebas de integración usan una base de datos aparte (`rumbo_test`) que **borran por completo**

@@ -63,6 +63,11 @@ correcto.
 - **Funciones opcionales:** hacer todas las que propone el brief salvo GraphQL y Prisma, que no
   resuelven ningún problema de este MVP. Autoricé la única dependencia nueva que hizo falta,
   `@nestjs/swagger`.
+- **Un duty no puede empezar en el pasado.** Añadí esta regla de negocio: al crear y al editar, el
+  inicio debe ser del minuto actual o posterior. Se valida en la api, que es la garantía, y en el
+  formulario, para avisar antes de enviar.
+- **Las instrucciones para arrancar la aplicación, al principio del README**, para que quien lo abra
+  pueda ponerla en marcha sin leer antes todo lo demás.
 - **Cambio de regla durante el proyecto:** al principio reservé para mí el README y esta bitácora.
   Después de la Fase 2 decidí que la IA mantuviera las instrucciones de uso del README en cada fase,
   y más tarde que redactara también el resto del README y esta bitácora, que yo reviso.
@@ -90,6 +95,7 @@ por qué me parecieron correctas:
 | En el formulario, primero el horario y después la unidad; las ocupadas, deshabilitadas | Con el horario elegido se sabe quién está libre: el planificador elige entre opciones válidas en lugar de descubrir el conflicto al guardar. |
 | Editar un duty con la misma transacción, bloqueando solo la unidad de destino y sin contar el propio duty | La unidad de origen solo pierde un duty y no puede quedar con un solapamiento; sin excluir el propio duty, acortar tu propio horario chocaría contigo mismo. |
 | Trazar la ruta por las calles con OSRM, llamado desde el navegador, solo en el detalle y con vuelta a la línea recta si falla | No pide clave ni cuenta, así que el proyecto sigue levantando sin configurar nada; la api no depende de un servicio externo; y pedir un trazado en cada clic del editor abusaría de un servidor público. |
+| Probar la lógica de la interfaz con el ejecutor de pruebas de Node en lugar de añadir Vitest a la web | Cubre la validación sin añadir dependencias. |
 | Documentar Swagger con anotaciones explícitas en lugar del plugin del CLI | Se ve qué se documenta sin conocer la magia del plugin, y los tests (que no pasan por el CLI) ven la misma documentación que producción. |
 | Instalar `procps` en la imagen y añadir `init: true` al contenedor | Resolvían la recarga en caliente y los procesos zombis (ver abajo). La IA no los aplicó hasta que los aprobé, porque eran dependencias nuevas. |
 
@@ -99,6 +105,10 @@ por qué me parecieron correctas:
   ("Planificacion", "Sin conexion") por miedo a un problema de codificación que no existía. Lo
   detecté en una captura de pantalla; ninguna comprobación automática lo habría cazado. Se corrigió y
   se convirtió en regla escrita.
+- **Un aviso correcto pero inútil.** Vi que el formulario decía "el fin debe ser posterior al inicio"
+  con un fin que parecía posterior. La IA encontró la causa: el año había quedado en 0026 al teclear
+  "26". Le pedí que lo arreglara y que lo cubriera con una prueba. Ahora el aviso señala el año, la
+  api rechaza años fuera de 2000–2100, y hay pruebas en la interfaz y en la api.
 - **Verificar en lugar de suponer.** Al pedir revisar si todas las dependencias estaban declaradas,
   la IA contrastó cada import con el `package.json` en lugar de responder de memoria.
 - **Mantener el proceso.** Cuando pregunté si la Fase 2 estaba terminada, la IA confirmó que no la

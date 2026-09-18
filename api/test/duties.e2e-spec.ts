@@ -99,6 +99,49 @@ describe('creación de duties', () => {
     await postDuty(firstUnitId, '2030-03-15T12:00:00Z', '2030-03-15T10:00:00Z').expect(400);
   });
 
+  it('rechaza con 400 un año fuera de rango, como el 0026 de un campo a medio escribir', async () => {
+    // Caso real: el formulario enviaba 0026 en lugar de 2026. El año 26 es anterior al inicio, pero el
+    // error útil es el del año, no el de "el fin debe ser posterior al inicio".
+    const response = await postDuty(
+      firstUnitId,
+      '2030-09-18T02:00:00-04:00',
+      '0030-09-18T02:53:00-04:00',
+    );
+
+    expect(response.status).toBe(400);
+    const endAtMessages = response.body.details.find(
+      (invalidField: { field: string }) => invalidField.field === 'endAt',
+    ).messages;
+    expect(endAtMessages).toContain('El año debe estar entre 2000 y 2100.');
+  });
+
+  it('acepta el mismo caso una vez escrito bien el año', async () => {
+    await postDuty(firstUnitId, '2030-09-18T02:00:00-04:00', '2030-09-18T02:53:00-04:00').expect(
+      201,
+    );
+  });
+
+  it('rechaza con 400 un duty cuyo inicio está en el pasado', async () => {
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR_MS).toISOString();
+    const inOneHour = new Date(Date.now() + ONE_HOUR_MS).toISOString();
+
+    const response = await postDuty(firstUnitId, oneHourAgo, inOneHour);
+
+    expect(response.status).toBe(400);
+    expect(response.body.details).toEqual([
+      { field: 'startAt', messages: ['El inicio no puede estar en el pasado.'] },
+    ]);
+  });
+
+  it('acepta un inicio en el minuto actual, aunque ya hayan pasado segundos', async () => {
+    const startOfCurrentMinute = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+    const inOneHour = new Date(startOfCurrentMinute.getTime() + ONE_HOUR_MS);
+
+    await postDuty(firstUnitId, startOfCurrentMinute.toISOString(), inOneHour.toISOString()).expect(
+      201,
+    );
+  });
+
   it('rechaza con 400 una fecha sin zona horaria', async () => {
     await postDuty(firstUnitId, '2030-03-15T10:00:00', '2030-03-15T12:00:00Z').expect(400);
   });
@@ -294,6 +337,13 @@ describe('disponibilidad de unidades, con un duty existente de 10:00 a 12:00 en 
     expect(availability.isAvailable).toBe(true);
   });
 
+  it('permite consultar la disponibilidad de un horario pasado', async () => {
+    await request(apiUrl)
+      .get('/api/units/availability')
+      .query({ startAt: '2020-03-15T10:00:00Z', endAt: '2020-03-15T12:00:00Z' })
+      .expect(200);
+  });
+
   it('rechaza con 400 una ventana sin zona horaria o con el fin antes del inicio', async () => {
     await request(apiUrl)
       .get('/api/units/availability')
@@ -356,6 +406,16 @@ describe('edición de duties', () => {
 
     expect(response.body.unitId).toBe(secondUnitId);
     expect(await countUnitDuties(firstUnitId)).toBe(0);
+  });
+
+  it('rechaza con 400 mover el inicio de un duty al pasado', async () => {
+    const duty = await postDuty(firstUnitId, EXISTING_WINDOW.startAt, EXISTING_WINDOW.endAt);
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR_MS).toISOString();
+
+    const response = await putDuty(duty.body.id, firstUnitId, oneHourAgo, EXISTING_WINDOW.endAt);
+
+    expect(response.status).toBe(400);
+    expect(response.body.details[0].field).toBe('startAt');
   });
 
   it('responde 404 si el duty o la unidad no existen, y 400 si se intenta cambiar la ruta', async () => {

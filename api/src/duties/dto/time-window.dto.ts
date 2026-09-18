@@ -10,6 +10,37 @@ const EXPLICIT_TIME_ZONE_PATTERN = /(Z|[+-]\d{2}:\d{2})$/;
 const DATE_FORMAT_MESSAGE = 'Debe ser una fecha ISO 8601, por ejemplo 2030-03-15T08:00:00Z.';
 const TIME_ZONE_MESSAGE = 'La fecha debe indicar su zona horaria, por ejemplo Z o -06:00.';
 
+// Límites de sentido común para una agenda de flota. Un campo de fecha a medio escribir en el navegador
+// deja años como 0026 (se tecleó "26"); sin este límite, ese duty se guardaría en el año 26.
+export const MIN_SUPPORTED_YEAR = 2000;
+export const MAX_SUPPORTED_YEAR = 2100;
+const SUPPORTED_YEAR_MESSAGE = `El año debe estar entre ${MIN_SUPPORTED_YEAR} y ${MAX_SUPPORTED_YEAR}.`;
+// El año tal como está escrito, al principio de la fecha (ISO 8601 admite años de hasta 6 dígitos).
+const LEADING_YEAR_PATTERN = /^[+-]?(\d{4,6})-/;
+
+/** Valida que el año escrito al principio de la fecha esté dentro de los límites razonables. */
+function IsWithinSupportedYears(): PropertyDecorator {
+  return (target: object, propertyName: string | symbol) => {
+    registerDecorator({
+      name: 'isWithinSupportedYears',
+      target: target.constructor,
+      propertyName: String(propertyName),
+      options: { message: SUPPORTED_YEAR_MESSAGE },
+      validator: {
+        /** Indica si el año está en rango; si la fecha no tiene forma de fecha, lo deja a los otros validadores. */
+        validate(dateValue: unknown): boolean {
+          const match = LEADING_YEAR_PATTERN.exec(String(dateValue));
+          if (!match) {
+            return true;
+          }
+          const year = Number(match[1]);
+          return year >= MIN_SUPPORTED_YEAR && year <= MAX_SUPPORTED_YEAR;
+        },
+      },
+    });
+  };
+}
+
 /** Valida que la propiedad sea una fecha posterior a la de la propiedad indicada. */
 function IsAfterProperty(startPropertyName: string, message: string): PropertyDecorator {
   return (target: object, propertyName: string | symbol) => {
@@ -45,6 +76,7 @@ export class TimeWindowDto {
   })
   @IsISO8601({ strict: true }, { message: DATE_FORMAT_MESSAGE })
   @Matches(EXPLICIT_TIME_ZONE_PATTERN, { message: TIME_ZONE_MESSAGE })
+  @IsWithinSupportedYears()
   startAt: string;
 
   @ApiProperty({
@@ -53,6 +85,7 @@ export class TimeWindowDto {
   })
   @IsISO8601({ strict: true }, { message: DATE_FORMAT_MESSAGE })
   @Matches(EXPLICIT_TIME_ZONE_PATTERN, { message: TIME_ZONE_MESSAGE })
+  @IsWithinSupportedYears()
   @IsAfterProperty('startAt', END_AFTER_START_MESSAGE)
   endAt: string;
 }

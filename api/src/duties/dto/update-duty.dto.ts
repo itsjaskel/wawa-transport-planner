@@ -2,10 +2,10 @@
 // en otra ruta es otro duty.
 import { ApiProperty } from '@nestjs/swagger';
 import { IsMongoId } from 'class-validator';
-import { TimeWindowDto } from './time-window.dto.js';
+import { DutyWindowDto } from './duty-window.dto.js';
 
 /** Cuerpo de `PUT /duties/:id`: unidad y ventana nuevas, con zona horaria explícita. */
-export class UpdateDutyDto extends TimeWindowDto {
+export class UpdateDutyDto extends DutyWindowDto {
   @ApiProperty({ example: '6aac65212fc7bccc37c0ec82' })
   @IsMongoId({ message: 'La unidad debe ser un id válido.' })
   unitId: string;

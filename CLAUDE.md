@@ -121,6 +121,9 @@ con `error TS5011`. Por eso `api/tsconfig.build.json` lo declara explícitamente
     una fase, una decisión nueva).
   - El README **solo afirma lo que existe**: la tabla "Estado actual" debe reflejar la verdad, y
     todo comando que aparezca en él se ejecuta antes de escribirlo.
+  - **Estructura del README** (decisión del responsable): justo después de la presentación va
+    *Cómo ponerla en marcha* (requisitos, iniciar, abrir, detener); el resto de instrucciones
+    (reiniciar, pruebas, demo, base de datos, problemas) va al final, en *Más instrucciones*.
   - El tono del README es **ligeramente coloquial** (decisión del responsable): cercano, pero sin
     perder precisión.
   - **Ambos se escriben en primera persona**, con la voz del responsable (decisión del
@@ -230,6 +233,20 @@ de la misma unidad → exactamente 1 con 200. **Contraprueba** (el `$inc` sustit
 con sesión, solo en la edición): tres ejecuciones, las tres `{ 200: 3, 409: 7 }`. Restaurado
 (comprobado byte a byte), vuelve a pasar.
 
+### El inicio de un duty no puede estar en el pasado
+
+Regla del responsable. Al **crear y al editar**, el inicio debe ser del minuto actual o posterior (se
+compara con el comienzo del minuto: los campos de fecha no tienen segundos). Vive en
+`DutyWindowDto` (`api/src/duties/dto/duty-window.dto.ts`), que heredan la creación y la edición; la
+consulta de disponibilidad usa `TimeWindowDto` y **sí** admite horarios pasados. En la interfaz,
+`validateDutyWindow` recibe "ahora" como parámetro (las pruebas no dependen del reloj) y el campo
+Inicio lleva `min`. Consecuencia aceptada: un duty que ya empezó no se puede editar sin moverlo al
+futuro; sí se puede borrar. `[verificado-en-dispositivo]`
+
+Trampa: la regla se añade en la subclase con `@Decorador() declare startAt: string;`. Con `declare`
+no se redefine el campo, y **el decorador sí se aplica en ejecución** (lo prueba el test del inicio
+en el pasado). `[verificado-en-dispositivo]`
+
 ### Vista previa de disponibilidad: ayuda, no garantía
 
 `GET /units/availability?startAt&endAt[&excludeDutyId]` usa **el mismo `buildOverlapFilter`** que la
@@ -321,7 +338,8 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 
 ```bash
 docker compose exec api npm test                   # unitarios (33 tests)
-docker compose exec api npm run test:e2e           # integración contra MongoDB real (50 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (56 tests)
+docker compose exec web npm test                   # lógica pura de la interfaz, con `node --test` (10)
 docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
 
@@ -548,6 +566,13 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   atributo SVG, donde una variable CSS no es fiable: el color va en la clase `route-line` de
   `leaflet-overrides.css`. `MARKER_SIZE_PX` (en `config/map.ts`) debe coincidir con
   `--tamaño-marcador`.
+- **Pruebas de la interfaz sin dependencias:** la lógica pura va en módulos **sin imports** (como
+  `utils/dutyWindow.ts`) y se prueba con el ejecutor de Node (`node --test`), importando con extensión
+  `.ts`. Los `*.test.ts` se excluyen de `tsconfig.app.json` y se tipan en `tsconfig.node.json` (que
+  tiene los tipos de Node). `[verificado-en-dispositivo]`
+- **Validación de la ventana de un duty** en `utils/dutyWindow.ts` (fechas completas, años entre 2000
+  y 2100, fin posterior al inicio). Cuando el fin es anterior, el mensaje muestra **las dos fechas
+  completas**. Ver error 15.
 - **Trazado por calles (OSRM):** lo pide el navegador (`web/src/api/roadRouting.ts`) al servidor
   público `router.project-osrm.org`, que responde con `Access-Control-Allow-Origin: *`
   `[verificado-en-dispositivo]`. OSRM usa el orden **[lng, lat]**: se invierte al leer y al escribir.
@@ -622,7 +647,8 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Regla de solapamiento (función pura y filtro de Mongo) | `api/src/duties/domain/overlap.ts` |
 | Tabla de 9 casos de solapamiento, compartida por los tests | `api/src/duties/domain/overlap-cases.ts` |
 | Esquema del duty, validación de ventana, índices, virtual `unit` | `api/src/duties/schemas/duty.schema.ts` |
-| Validación de la ventana (zona obligatoria, fin posterior), compartida | `api/src/duties/dto/time-window.dto.ts` |
+| Validación de la ventana (zona obligatoria, años 2000–2100, fin posterior), compartida | `api/src/duties/dto/time-window.dto.ts` |
+| Regla del inicio no pasado, para crear y editar | `api/src/duties/dto/duty-window.dto.ts` |
 | Validación de la creación de duty | `api/src/duties/dto/create-duty.dto.ts` |
 | Validación de la edición de duty (unidad y ventana) | `api/src/duties/dto/update-duty.dto.ts` |
 | Parámetros de la consulta de disponibilidad | `api/src/duties/dto/unit-availability-query.dto.ts` |
@@ -656,6 +682,7 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Hook del trazado por calles | `web/src/hooks/useRoadRoute.ts` |
 | Resumen de distancia y tiempo bajo el mapa | `web/src/components/RoadRouteSummary.tsx` |
 | Formato de distancias y tiempos de viaje | `web/src/utils/measurements.ts` |
+| Validación de la ventana de un duty en el formulario, y sus pruebas | `web/src/utils/dutyWindow.ts`, `web/src/utils/dutyWindow.test.ts` |
 | Lista editable de puntos | `web/src/components/RoutePointsEditor.tsx` |
 | Lista de puntos de solo lectura | `web/src/components/RoutePointList.tsx` |
 | Formulario de duty (asignar y editar) | `web/src/components/DutyForm.tsx` |
@@ -862,6 +889,19 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   que sobresalían: el primero fuera de la caja con scroll era la columna de la rejilla.
 - **Solución:** `minmax(0, 1fr)` en todas las rejillas del proyecto, también en las que todavía no
   fallaban. `[verificado-en-dispositivo]`
+
+### 15. "El fin debe ser posterior al inicio" con un fin que parecía posterior
+
+- **Qué falló:** el responsable vio el aviso con inicio 18/09/2026 02:00 y fin 18/09/**0026** 02:53.
+  El aviso era cierto (el año 26 es anterior), pero no ayudaba a encontrar el error.
+- **Causa raíz:** el campo `datetime-local` rellena el año dígito a dígito: si se teclea "26", queda
+  0026. Ni la interfaz ni la api acotaban el año, y el mensaje no mostraba las fechas.
+- **Cómo se detectó:** una captura de pantalla del responsable.
+- **Solución:**
+  - la interfaz dice qué año está mal y, cuando el fin es anterior, muestra las dos fechas completas;
+  - la api rechaza años fuera de 2000–2100 en toda ventana (crear, editar, disponibilidad).
+
+  Con pruebas en los dos lados: 7 en la web y 2 de integración. `[verificado-en-dispositivo]`
 
 ---
 

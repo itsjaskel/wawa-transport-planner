@@ -14,6 +14,7 @@ import {
   formatUtcOffset,
   isValidLocalInput,
 } from '../utils/dateTime';
+import { formatMinuteForInput, isValidDutyWindow, validateDutyWindow } from '../utils/dutyWindow';
 import { groupFieldMessages, hasFieldMessages, type FieldMessages } from '../utils/invalidFields';
 import { Button } from './Button';
 import { DutyConflictWarning } from './DutyConflictWarning';
@@ -50,15 +51,9 @@ function buildInitialValues(dutyToEdit: RouteDuty | undefined): DutyFormValues {
   };
 }
 
-/** Devuelve la ventana en ISO si inicio y fin son válidos y el fin es posterior; si no, null. */
+/** Devuelve la ventana en ISO si es válida del todo (fechas, años y orden); si no, null. */
 function buildAvailabilityWindow(formValues: DutyFormValues): AvailabilityWindow | null {
-  const hasValidDates =
-    isValidLocalInput(formValues.startLocal) && isValidLocalInput(formValues.endLocal);
-  if (!hasValidDates) {
-    return null;
-  }
-  const endsAfterStart = new Date(formValues.endLocal) > new Date(formValues.startLocal);
-  if (!endsAfterStart) {
+  if (!isValidDutyWindow(formValues.startLocal, formValues.endLocal)) {
     return null;
   }
   return {
@@ -69,24 +64,13 @@ function buildAvailabilityWindow(formValues: DutyFormValues): AvailabilityWindow
 
 /** Revisa lo obvio antes de enviar, para no hacer esperar al usuario por un error evidente. */
 function validateDutyForm(formValues: DutyFormValues): FieldMessages {
-  const fieldMessages: FieldMessages = {};
-
+  // La ventana se valida en `dutyWindow.ts`, que tiene sus propias pruebas.
+  const fieldMessages: FieldMessages = {
+    ...validateDutyWindow(formValues.startLocal, formValues.endLocal),
+  };
   if (formValues.unitId === '') {
     fieldMessages.unitId = ['Elige una unidad.'];
   }
-  if (!isValidLocalInput(formValues.startLocal)) {
-    fieldMessages.startAt = ['Indica la fecha y hora de inicio.'];
-  }
-  if (!isValidLocalInput(formValues.endLocal)) {
-    fieldMessages.endAt = ['Indica la fecha y hora de fin.'];
-  }
-
-  const hasBothDates = !fieldMessages.startAt && !fieldMessages.endAt;
-  const endsAfterStart = new Date(formValues.endLocal) > new Date(formValues.startLocal);
-  if (hasBothDates && !endsAfterStart) {
-    fieldMessages.endAt = ['El fin debe ser posterior al inicio.'];
-  }
-
   return fieldMessages;
 }
 
@@ -204,6 +188,9 @@ export function DutyForm({ routeId, dutyToEdit, onDutySaved, onCancel }: DutyFor
           <input
             id={`${fieldIdPrefix}-start`}
             type="datetime-local"
+            // El selector del navegador no ofrece fechas pasadas; la validación real es la del
+            // formulario y la de la api.
+            min={formatMinuteForInput(new Date())}
             value={formValues.startLocal}
             onChange={(changeEvent) => updateField('startLocal', changeEvent.target.value)}
             aria-invalid={fieldMessages.startAt !== undefined}
