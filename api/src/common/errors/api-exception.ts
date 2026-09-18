@@ -11,6 +11,7 @@ export const API_ERROR_TYPES = {
   duplicateKey: 'DuplicateKey',
   conflict: 'Conflict',
   scheduleBusy: 'ScheduleBusy',
+  unitInUse: 'UnitInUse',
   payloadTooLarge: 'PayloadTooLarge',
   internal: 'InternalError',
   http: 'HttpError',

@@ -1,0 +1,25 @@
+/* Estilos del aviso de unidad que no se puede borrar por tener duties. */
+
+.unitInUseWarning {
+  margin-bottom: var(--espacio-md);
+  padding: var(--espacio-md);
+  border-left: 4px solid var(--color-aviso);
+  border-radius: var(--radio-sm);
+  background-color: var(--color-fondo-aviso);
+}
+
+.title {
+  margin: 0;
+  font-weight: var(--peso-fuerte);
+  color: var(--color-aviso);
+}
+
+.hint {
+  margin: var(--espacio-sm) 0 var(--espacio-xs);
+  font-size: var(--tamaño-sm);
+}
+
+.routeList {
+  margin: 0;
+  padding-left: var(--espacio-lg);
+}

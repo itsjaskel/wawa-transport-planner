@@ -56,6 +56,10 @@ correcto.
   - **Verificación en tres anchos reales** (390, 768 y 1280 px) y recorrido de los flujos con clics
     en un navegador. Decidí no añadir pruebas automatizadas de la interfaz: la lógica crítica está
     en la api y ya está cubierta.
+- **Borrar unidades solo si no tienen duties.** Entre borrar en cascada, dar de baja sin borrar o
+  impedir el borrado, elegí impedirlo: nunca se pierde el historial de turnos por un clic. Decidí
+  también que el código de la unidad no se edite, solo su nombre, y que esto fuera un paso aparte y
+  no parte de las funciones opcionales.
 - **Cambio de regla durante el proyecto:** al principio reservé para mí el README y esta bitácora.
   Después de la Fase 2 decidí que la IA mantuviera las instrucciones de uso del README en cada fase,
   y más tarde que redactara también el resto del README y esta bitácora, que yo reviso.
@@ -77,6 +81,8 @@ por qué me parecieron correctas:
 | No bloquear la unidad al borrar un duty | Borrar no puede crear solapamientos; en el peor caso produce un 409 de más, que es el error seguro. |
 | Tests de integración contra una base aparte que se niegan a correr en otra | Borran la base al empezar; esa protección evita destruir datos por accidente. |
 | Sacar la configuración global a un archivo compartido por la api y los tests | Así los tests prueban la api exactamente como corre. |
+| El 409 al borrar una unidad con duties indica en qué rutas están, con enlaces | Sin eso, el mensaje "tiene 3 duties, elimínalos antes" deja al planificador sin saber dónde buscarlos: no hay otra forma de ver los duties de una unidad. |
+| Borrar la unidad dentro de una transacción, sin un contador propio | El borrado ya escribe en el mismo documento que la asignación de un duty, así que MongoDB detecta el choque igual. La IA lo propuso primero con un contador y lo corrigió antes de implementarlo. |
 | Instalar `procps` en la imagen y añadir `init: true` al contenedor | Resolvían la recarga en caliente y los procesos zombis (ver abajo). La IA no los aplicó hasta que los aprobé, porque eran dependencias nuevas. |
 
 ## Dónde corregí a la IA o no di algo por bueno
@@ -111,6 +117,13 @@ que cambiaron el resultado:
   pantallas cortadas. Antes de tocar el CSS medí el ancho real: el navegador sin ventana no admite
   ventanas tan estrechas y recortaba la imagen. Solo una pantalla desbordaba de verdad (la del punto
   anterior).
+- **Un test de concurrencia que no probaba nada.** La primera versión del test de "asignar y
+  borrar a la vez" pasaba, pero en todas las rondas ganaba la asignación. En lugar de darlo por
+  bueno, lo comprobé con una contraprueba: sin la transacción, las 40 rondas dejaban un duty
+  huérfano. Con ella, ninguna. Solo entonces el test demostraba algo.
+- **Una rejilla que ensanchaba la página en móvil.** Al editar una unidad en el móvil, la página se
+  desplazaba 8 px de lado: las columnas definidas con `1fr` no bajan del ancho de su contenido. Se
+  cambiaron todas las rejillas a `minmax(0, 1fr)`.
 - **Fallos del entorno, no del código:** virtualización desactivada en la BIOS y el reloj del sistema
   desfasado tres horas, que rompía la construcción de imágenes. Se documentaron para quien levante el
   proyecto en otra máquina.

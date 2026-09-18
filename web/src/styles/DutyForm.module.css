@@ -20,7 +20,7 @@
 /* Una columna en móvil; unidad, inicio y fin en fila desde escritorio. */
 .fields {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--espacio-md);
 }
 
@@ -44,6 +44,6 @@
 
 @media (min-width: 900px) {
   .fields {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

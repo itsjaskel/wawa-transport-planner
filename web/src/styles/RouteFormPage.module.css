@@ -28,7 +28,7 @@
 /* En móvil y tableta el mapa y los puntos se apilan; en escritorio van lado a lado. */
 .editorLayout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--espacio-lg);
 }
 
@@ -68,7 +68,7 @@
 
 @media (min-width: 900px) {
   .editorLayout {
-    grid-template-columns: 3fr 2fr;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     align-items: start;
   }
 

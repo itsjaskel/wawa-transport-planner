@@ -212,8 +212,29 @@ relajar la desconfianza justo donde hace falta. Media defensa es peor que ningun
   `MongoOperationTimeoutError` si se configura `timeoutMS`. El servicio reconoce ambas formas y
   responde **503 `ScheduleBusy`**. En el driver 7.6.0 hay además espera creciente entre reintentos.
   `[verificado-contra-la-librería]`. El 503 en sí **no se ha provocado nunca**: `[compila]`.
-- **El borrado no bloquea la unidad.** Borrar no puede crear solapamientos; en el peor caso una
-  creación simultánea todavía ve el duty que se borra y responde 409 de más, que es el error seguro.
+- **El borrado de un duty no bloquea la unidad.** Borrar no puede crear solapamientos; en el peor
+  caso una creación simultánea todavía ve el duty que se borra y responde 409 de más, que es el
+  error seguro.
+
+### Borrar una unidad sin dejar duties huérfanos
+
+Regla: **una unidad solo se borra si no tiene duties** (409 `UnitInUse` con las rutas donde están).
+`DutiesService.deleteUnit`, dentro de una transacción y en este orden: la unidad existe (404), no
+tiene duties (409), se borra.
+
+**No lleva `$inc` propio, y no le hace falta:** el `deleteOne` escribe en el mismo documento que
+`lockUnitSchedule` incrementa al asignar un duty. Si coinciden, MongoDB detecta el conflicto y una
+reintenta: o el borrado ve el duty nuevo (409), o la asignación ya no encuentra la unidad (404).
+
+**Verificado** `[verificado-en-dispositivo]`: 40 rondas de asignación y borrado simultáneos, alternando
+cuál sale primero, sin ningún duty huérfano (`duty 201 / borrado 409` en las 40). **Contraprueba**:
+sin la transacción, tres ejecuciones seguidas con el mismo resultado, `duty 201 / borrado 204` en las
+40 rondas, es decir, **40 duties huérfanos de 40**. Con la transacción restaurada (comprobada byte a
+byte), vuelve a pasar.
+
+Trampa del test: la primera versión, sin contraprueba, pasaba porque siempre ganaba la asignación (que
+escribe primero, mientras el borrado primero lee). Un test de concurrencia en verde no prueba nada
+hasta que se ve fallar sin el mecanismo.
 
 ### Estado verificado del soporte de transacciones
 
@@ -279,7 +300,7 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 
 ```bash
 docker compose exec api npm test                   # unitarios (33 tests)
-docker compose exec api npm run test:e2e           # integración contra MongoDB real (22 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (31 tests)
 docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
 
@@ -482,6 +503,8 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   `--tamaño-marcador`.
 - **Contenedores con desplazamiento horizontal** (`overflow-x: auto`): llevan `position: relative`
   si dentro hay algo posicionado en absoluto. Ver error 12.
+- **Rejillas: siempre `minmax(0, Nfr)`, nunca `Nfr` a secas.** `1fr` no baja del ancho mínimo del
+  contenido, y una tabla ancha ensancha la columna y la página. Ver error 14.
 
 ### Convención de imports de Mongoose (importante)
 
@@ -542,7 +565,11 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Validación de la creación de duty (fechas con zona) | `api/src/duties/dto/create-duty.dto.ts` |
 | Transacción, bloqueo de la unidad (`$inc`), 409 y 503 | `api/src/duties/duties.service.ts` |
 | Endpoints de duties, incluido `GET /routes/:id/duties` | `api/src/duties/duties.controller.ts` |
-| Tests de integración y de concurrencia | `api/test/duties.e2e-spec.ts` |
+| Tests de integración y de concurrencia de duties | `api/test/duties.e2e-spec.ts` |
+| Tests de edición y borrado de unidades, incluida la concurrencia | `api/test/units.e2e-spec.ts` |
+| Arranque compartido de los tests de integración contra `rumbo_test` | `api/test/support/test-application.ts` |
+| Validación de la edición de unidad (solo el nombre) | `api/src/units/dto/update-unit.dto.ts` |
+| Borrado de unidad sin duties (transacción) | `api/src/duties/duties.service.ts` (`deleteUnit`) |
 | Demo de concurrencia por HTTP | `api/scripts/concurrency-demo.ts` |
 | Punto de entrada del frontend, TanStack Query, política de reintentos | `web/src/main.tsx` |
 | Mapa de pantallas (rutas de navegación) | `web/src/router.tsx` |
@@ -550,7 +577,7 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Cliente HTTP único y `ApiError` | `web/src/api/client.ts` |
 | Tipos del dominio en el frontend | `web/src/api/types.ts` |
 | Claves de TanStack Query | `web/src/hooks/queryKeys.ts` |
-| Hooks de lectura y escritura | `web/src/hooks/use*.ts` (`useRoutes`, `useRoute`, `useSaveRoute`, `useUnits`, `useCreateUnit`, `useRouteDuties`, `useCreateDuty`, `useDeleteDuty`, `useApiHealth`) |
+| Hooks de lectura y escritura | `web/src/hooks/use*.ts` (`useRoutes`, `useRoute`, `useSaveRoute`, `useUnits`, `useCreateUnit`, `useUpdateUnit`, `useDeleteUnit`, `useRouteDuties`, `useCreateDuty`, `useDeleteDuty`, `useApiHealth`) |
 | Fechas: formato local con desfase UTC, conversión del formulario | `web/src/utils/dateTime.ts` |
 | Errores de validación agrupados por campo | `web/src/utils/invalidFields.ts` |
 | Borradores de puntos del editor de rutas | `web/src/utils/routePointDrafts.ts` |
@@ -566,6 +593,8 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Formulario de duty | `web/src/components/DutyForm.tsx` |
 | Aviso de conflicto de horario (409) | `web/src/components/DutyConflictWarning.tsx` |
 | Tabla de duties con borrado | `web/src/components/DutyList.tsx` |
+| Tabla de unidades con edición del nombre y borrado | `web/src/components/UnitsTable.tsx` |
+| Aviso de unidad con duties (409 al borrar) | `web/src/components/UnitInUseWarning.tsx` |
 | Componentes compartidos | `web/src/components/` (`Button`, `StatusMessage`, `SuccessNotice`, `FieldErrors`, `ConfirmDialog`, `ApiHealthBadge`) |
 | Variables CSS, reinicio global y campos de formulario | `web/src/styles/base.css` |
 | Estilos dirigidos a Leaflet (hoja global) | `web/src/styles/leaflet-overrides.css` |
@@ -753,6 +782,18 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   `Emulation.setDeviceMetricsOverride` por el protocolo de depuración (CDP), no con `--window-size`.
   `[verificado-en-dispositivo]`
 
+### 14. Al editar una unidad en móvil, la página se desplazaba de lado
+
+- **Qué falló:** con una fila de la tabla de unidades en edición, la página medía 398 px en un
+  viewport de 390.
+- **Causa raíz:** la rejilla de la pantalla usaba `grid-template-columns: 1fr`. `1fr` equivale a
+  `minmax(auto, 1fr)`: la columna no baja del ancho mínimo de su contenido, así que la tabla la
+  ensanchaba en lugar de desplazarse dentro de su caja.
+- **Cómo se detectó:** midiendo el ancho de la página con la edición abierta y listando los elementos
+  que sobresalían: el primero fuera de la caja con scroll era la columna de la rejilla.
+- **Solución:** `minmax(0, 1fr)` en todas las rejillas del proyecto, también en las que todavía no
+  fallaban. `[verificado-en-dispositivo]`
+
 ---
 
 ## 9. Supuestos pendientes y riesgos conocidos
@@ -811,6 +852,8 @@ Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
 | PUT | `/routes/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 | GET | `/routes/:id/duties` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
 | GET | `/units` | 200 | **Hecho** `[verificado-en-dispositivo]` |
+| PATCH | `/units/:id` | 200, 400, 404 | **Hecho** `[verificado-en-dispositivo]` (solo `name`) |
+| DELETE | `/units/:id` | 204, 400, 404, **409** | **Hecho** `[verificado-en-dispositivo]` (solo sin duties) |
 | POST | `/units` | 201, 400, 409 | **Hecho** `[verificado-en-dispositivo]` |
 | POST | `/duties` | 201, 400, 404, **409**, 503 | **Hecho** `[verificado-en-dispositivo]` (el 503 solo `[compila]`) |
 | DELETE | `/duties/:id` | 204, 400, 404 | **Hecho** `[verificado-en-dispositivo]` |
@@ -818,7 +861,8 @@ Prefijo global `/api`. Swagger en `/api/docs` (Fase 4).
 **Formato de error uniforme** mediante filtro global: `{ statusCode, error, message, details? }`.
 Tipos de `error`: `ValidationError` (con `details`), `BadRequest` (petición ilegible, por ejemplo
 JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conflict` (solapamiento),
-`ScheduleBusy` (503, reintentos de transacción agotados), `PayloadTooLarge`, `InternalError`,
+`ScheduleBusy` (503, reintentos de transacción agotados), `UnitInUse` (409 al borrar una unidad
+con duties; `details = { dutyCount, routes: [{ id, name, dutyCount }] }`), `PayloadTooLarge`, `InternalError`,
 `HttpError` (cualquier otro código ajeno). Mapeos obligatorios, cubiertos por tests y comprobados con
 `curl` contra la api en Docker `[verificado-en-dispositivo]`:
 
@@ -844,6 +888,8 @@ JSON mal formado; sin `details`), `InvalidId`, `NotFound`, `DuplicateKey`, `Conf
   endAt }`, suficiente para que la interfaz escriba "La unidad BUS-001 ya tiene un duty de 08:00 a
   12:00 en la ruta Centro - Polanco" sin otra consulta. El `message` no incluye horas porque el
   servidor no conoce la zona horaria del usuario.
+- `PATCH /units/:id` recibe solo `{ name }`; mandar `code` responde 400 ("Este campo no está
+  permitido").
 - `GET/POST /units`: `{ id, code, name, createdAt, updatedAt }`, ordenado por `code`. `code` se guarda
   en mayúsculas y solo admite letras, dígitos y guiones; `bus-001` choca con `BUS-001` (409).
   `scheduleVersion` se guarda como `0` y nunca aparece en las respuestas. `[verificado-en-dispositivo]`

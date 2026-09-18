@@ -10,10 +10,14 @@
   margin-bottom: var(--espacio-md);
 }
 
-/* En móvil el formulario va arriba y el listado debajo; en escritorio, lado a lado. */
+/*
+ * En móvil el formulario va arriba y el listado debajo; en escritorio, lado a lado.
+ * `minmax(0, …)` y no `1fr` a secas: `1fr` no baja del ancho mínimo del contenido, y una tabla ancha
+ * ensancharía la columna (y la página) en lugar de desplazarse dentro de su caja.
+ */
 .layout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--espacio-lg);
   align-items: start;
 }
@@ -57,45 +61,9 @@
   flex: 1;
 }
 
-/* El desplazamiento horizontal queda contenido en esta caja: la página nunca se mueve de lado. */
-.tableScroller {
-  overflow-x: auto;
-  border: 1px solid var(--color-borde);
-  border-radius: var(--radio-md);
-  background-color: var(--color-superficie);
-}
-
-.unitsTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--tamaño-sm);
-}
-
-.unitsTable th,
-.unitsTable td {
-  padding: var(--espacio-sm) var(--espacio-md);
-  border-bottom: 1px solid var(--color-borde);
-  text-align: left;
-}
-
-.unitsTable th {
-  background-color: var(--color-fondo);
-  color: var(--color-texto-suave);
-  font-weight: var(--peso-medio);
-}
-
-.unitsTable tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.unitCode {
-  font-weight: var(--peso-fuerte);
-  white-space: nowrap;
-}
-
 @media (min-width: 900px) {
   .layout {
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   }
 
   .formCard {

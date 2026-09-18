@@ -1,17 +1,12 @@
 // Tests de integración de duties contra un MongoDB real (base `rumbo_test`), pasando por HTTP,
 // validación y filtro de errores exactamente como en producción. Incluye la prueba de concurrencia.
 import type { INestApplication } from '@nestjs/common';
-import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
-import type { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
-import type { AddressInfo } from 'node:net';
-import type { Connection, Model } from 'mongoose';
+import { getModelToken } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
 import request from 'supertest';
-import { configureApp } from '../src/app.setup.js';
 import { EXISTING_WINDOW, OVERLAP_CASES } from '../src/duties/domain/overlap-cases.js';
+import { createEntity, startTestApplication } from './support/test-application.js';
 
-// Base exclusiva de los tests: se borra entera al empezar. El test se niega a correr en otra.
-const TEST_DATABASE_NAME = 'rumbo_test';
 const CONCURRENT_REQUEST_COUNT = 10;
 // Las peticiones simultáneas provocan reintentos de transacción con espera entre ellos.
 const CONCURRENCY_TEST_TIMEOUT_MS = 60_000;
@@ -28,54 +23,6 @@ let dutyModel: Model<unknown>;
 let firstUnitId: string;
 let secondUnitId: string;
 let routeId: string;
-
-/** Apunta la cadena de conexión a la base de tests conservando host y opciones. */
-function useTestDatabase(): void {
-  const databaseUrl = new URL(process.env.MONGODB_URI ?? '');
-  databaseUrl.pathname = `/${TEST_DATABASE_NAME}`;
-  process.env.MONGODB_URI = databaseUrl.toString();
-}
-
-/** Levanta la aplicación completa escuchando en un puerto libre, con la configuración de producción. */
-async function startApplication(): Promise<void> {
-  // `ConfigModule.forRoot` lee el entorno al importar AppModule: por eso se importa después
-  // de cambiar la cadena de conexión, y no arriba con el resto.
-  const { AppModule } = await import('../src/app.module.js');
-  const testingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
-
-  app = testingModule.createNestApplication<NestExpressApplication>();
-  configureApp(app as NestExpressApplication);
-  await app.listen(0, '127.0.0.1');
-
-  const serverAddress = app.getHttpServer().address() as AddressInfo;
-  apiUrl = `http://127.0.0.1:${serverAddress.port}`;
-}
-
-/** Vacía la base de tests y crea colecciones e índices antes de lanzar peticiones simultáneas. */
-async function prepareDatabase(): Promise<void> {
-  const connection = app.get<Connection>(getConnectionToken());
-
-  if (connection.name !== TEST_DATABASE_NAME) {
-    throw new Error(`Los tests borran la base: se niegan a correr contra "${connection.name}".`);
-  }
-
-  await connection.dropDatabase();
-
-  // Si la colección se creara durante las peticiones simultáneas, los fallos vendrían de esa
-  // creación concurrente y no del mecanismo que se quiere probar.
-  for (const model of Object.values(connection.models)) {
-    await model.createCollection();
-    await model.syncIndexes();
-  }
-
-  dutyModel = app.get<Model<unknown>>(getModelToken('Duty'));
-}
-
-/** Crea una entidad por HTTP y devuelve su id; falla el test si la api no responde 201. */
-async function createEntity(path: string, body: object): Promise<string> {
-  const response = await request(apiUrl).post(`/api${path}`).send(body).expect(201);
-  return response.body.id;
-}
 
 /** Envía la creación de un duty para la ruta de prueba y devuelve la respuesta sin interpretarla. */
 function postDuty(unitId: string, startAt: string, endAt: string): request.Test {
@@ -97,13 +44,20 @@ function countByStatus(responses: request.Response[]): Record<number, number> {
 }
 
 beforeAll(async () => {
-  useTestDatabase();
-  await startApplication();
-  await prepareDatabase();
+  const testApplication = await startTestApplication();
+  app = testApplication.app;
+  apiUrl = testApplication.apiUrl;
+  dutyModel = app.get<Model<unknown>>(getModelToken('Duty'));
 
-  firstUnitId = await createEntity('/units', { code: 'TEST-001', name: 'Unidad de prueba 1' });
-  secondUnitId = await createEntity('/units', { code: 'TEST-002', name: 'Unidad de prueba 2' });
-  routeId = await createEntity('/routes', { name: 'Ruta de prueba', points: TWO_POINTS });
+  firstUnitId = await createEntity(apiUrl, '/units', {
+    code: 'TEST-001',
+    name: 'Unidad de prueba 1',
+  });
+  secondUnitId = await createEntity(apiUrl, '/units', {
+    code: 'TEST-002',
+    name: 'Unidad de prueba 2',
+  });
+  routeId = await createEntity(apiUrl, '/routes', { name: 'Ruta de prueba', points: TWO_POINTS });
 });
 
 afterAll(async () => {

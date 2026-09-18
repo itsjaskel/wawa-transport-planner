@@ -1,6 +1,6 @@
 // Cliente HTTP único de la aplicación: concentra la url base de la api y la
 // traducción de una respuesta de error a algo que la interfaz pueda mostrar.
-import type { ConflictingDuty, InvalidField } from './types';
+import type { ConflictingDuty, InvalidField, UnitDutyRoute } from './types';
 
 // Vite incrusta esta variable en tiempo de compilación, no de ejecución.
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
@@ -47,6 +47,16 @@ export class ApiError extends Error {
     }
     const conflictDetails = this.details as { conflictingDuty?: ConflictingDuty } | undefined;
     return conflictDetails?.conflictingDuty ?? null;
+  }
+
+  /** Devuelve las rutas con duties de una unidad que no se pudo borrar, o null si no es ese error. */
+  readUnitDutyRoutes(): UnitDutyRoute[] | null {
+    const isUnitInUse = this.errorType === 'UnitInUse';
+    if (!isUnitInUse) {
+      return null;
+    }
+    const unitInUseDetails = this.details as { routes?: UnitDutyRoute[] } | undefined;
+    return unitInUseDetails?.routes ?? [];
   }
 }
 

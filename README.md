@@ -26,7 +26,11 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
 - **Rutas:** crear, consultar y editar. Los puntos se guardan embebidos en la ruta y su orden es su
   posición en la lista, así que no puede haber huecos ni números de orden repetidos. Cada punto
   tiene latitud, longitud y nombre opcional. Una ruta tiene entre 2 y 200 puntos.
-- **Unidades:** alta y listado, con código único (`BUS-001`) que no distingue mayúsculas.
+- **Unidades:** alta, listado, edición del nombre y borrado, con código único (`BUS-001`) que no
+  distingue mayúsculas. **Una unidad solo se puede borrar si no tiene duties**: así nunca se pierde
+  el historial de turnos por un clic. Si tiene alguno, la aplicación dice cuántos y en qué rutas
+  están, con enlaces para ir a quitarlos. El código no se edita: es lo que el planificador ve en los
+  mensajes de conflicto, y cambiarlo sobre la marcha confunde más de lo que ayuda.
 - **Duties:** asignar, borrar y listar los duties de una ruta. El duty guarda **inicio y fin
   explícitos**, no inicio más duración: el fin es justo lo que se compara al buscar solapamientos,
   así que preferí que fuera un dato y no un cálculo.
@@ -42,7 +46,7 @@ Si solo quieres levantarlo y probarlo, salta a [Cómo usar este proyecto](#cómo
   a esa ruta.
 - **Crear y editar rutas** haciendo clic en el mapa: cada clic añade un punto al final. Los puntos se
   pueden renombrar, corregir a mano, reordenar y quitar, y la línea se redibuja al instante.
-- **Unidades:** alta y listado.
+- **Unidades:** alta, listado, edición del nombre en la propia fila y borrado con confirmación.
 - Todo cambio se refleja sin recargar la página. Antes de borrar pido confirmación, y cada acción
   termina con un aviso de que salió bien o con el error explicado junto al campo que lo provocó.
 - **Las horas se muestran en la zona horaria de quien usa la aplicación, siempre con su desfase UTC
@@ -81,6 +85,10 @@ aunque la api corra en varias instancias.
   función: un error en la consulta pasaría desapercibido si solo probara la función.
 - Lancé 10 peticiones simultáneas solapadas sobre la misma unidad: **se crea exactamente 1**. Y 10
   simultáneas que no se solapan: **se crean las 10**; el bloqueo ordena, no descarta.
+- El borrado de una unidad sigue la misma lógica: se hace dentro de una transacción que escribe en
+  el mismo documento que la asignación de un duty. Lancé 40 rondas de "asignar un duty y borrar su
+  unidad a la vez": **nunca quedó un duty apuntando a una unidad borrada**. Y al quitar la
+  transacción, las 40 rondas dejaron un duty huérfano: la prueba detecta de verdad el fallo.
 - **Contraprueba:** quité el incremento a propósito y el test falló, que es lo que tenía que pasar.
   En tres ejecuciones seguidas se crearon **3 duties solapados** en la misma unidad. O sea, el test
   de verdad detecta lo que dice probar.
@@ -101,7 +109,7 @@ aunque la api corra en varias instancias.
 
 ### Pruebas automatizadas
 
-La api tiene 33 pruebas unitarias y 22 de integración contra MongoDB real, incluidas las de
+La api tiene 33 pruebas unitarias y 31 de integración contra MongoDB real, incluidas las de
 concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
 
 La interfaz no tiene pruebas automatizadas (lo explico abajo). La recorrí con clics reales en un
@@ -131,7 +139,8 @@ donde no conviene.
 | Qué | Por qué |
 |---|---|
 | Autenticación y roles | No aporta a lo que se evalúa, y hacerla bien lleva más tiempo del que justifica un MVP. |
-| Borrar rutas y unidades | Obliga a decidir qué pasa con sus duties (¿se borran?, ¿se impide?). Es una decisión de negocio y prefiero no tomarla a ciegas. |
+| Borrar rutas | Obliga a decidir qué pasa con sus duties (¿se borran?, ¿se impide?). Para las unidades lo decidí (solo sin duties); para las rutas no lo necesité todavía. |
+| Borrar una unidad junto con sus duties, o darla de baja sin borrarla | Consideré las dos opciones. Borrar en cascada hace que un clic se lleve el historial; la baja lógica añade un estado nuevo al modelo. Elegí la más segura: solo se borra si no tiene duties. |
 | Editar un duty | Hoy se borra y se crea de nuevo. Editarlo exige la misma garantía de concurrencia; queda como opcional. |
 | Consultar qué tiene asignado una unidad | Solo se consultan los duties por ruta, que es lo que pide el brief. |
 | Duties recurrentes (todos los lunes…) | Los duties son fechas absolutas. Los recurrentes cambian por completo el modelo de la regla. |

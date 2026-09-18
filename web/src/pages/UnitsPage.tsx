@@ -1,10 +1,12 @@
-// Pantalla de unidades: alta mínima (código y nombre) y listado de la flota.
+// Pantalla de unidades: alta (código y nombre) y listado de la flota, con edición del nombre y
+// borrado de las unidades que no tienen duties.
 import { useCallback, useState, type FormEvent } from 'react';
 import { ApiError } from '../api/client';
 import { Button } from '../components/Button';
 import { FieldErrors } from '../components/FieldErrors';
 import { StatusMessage } from '../components/StatusMessage';
 import { SuccessNotice } from '../components/SuccessNotice';
+import { UnitsTable } from '../components/UnitsTable';
 import { useCreateUnit } from '../hooks/useCreateUnit';
 import { useUnits } from '../hooks/useUnits';
 import styles from '../styles/UnitsPage.module.css';
@@ -98,7 +100,7 @@ function CreateUnitForm({ onUnitCreated }: { onUnitCreated: (successMessage: str
 }
 
 /** Listado de unidades según el estado de la consulta: cargando, error, vacío o la tabla. */
-function UnitsList() {
+function UnitsList({ onUnitChanged }: { onUnitChanged: (successMessage: string) => void }) {
   const { data: units, isPending, isError, error } = useUnits();
 
   if (isPending) {
@@ -119,29 +121,10 @@ function UnitsList() {
     );
   }
 
-  return (
-    <div className={styles.tableScroller}>
-      <table className={styles.unitsTable}>
-        <thead>
-          <tr>
-            <th scope="col">Código</th>
-            <th scope="col">Nombre</th>
-          </tr>
-        </thead>
-        <tbody>
-          {units.map((unit) => (
-            <tr key={unit.id}>
-              <td className={styles.unitCode}>{unit.code}</td>
-              <td>{unit.name}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <UnitsTable units={units} onUnitChanged={onUnitChanged} />;
 }
 
-/** Pantalla de unidades: alta y listado. */
+/** Pantalla de unidades: alta, listado, edición del nombre y borrado. */
 export function UnitsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const dismissSuccessMessage = useCallback(() => setSuccessMessage(null), []);
@@ -155,7 +138,7 @@ export function UnitsPage() {
           <CreateUnitForm onUnitCreated={setSuccessMessage} />
         </div>
         <section aria-label="Listado de unidades">
-          <UnitsList />
+          <UnitsList onUnitChanged={setSuccessMessage} />
         </section>
       </div>
     </section>

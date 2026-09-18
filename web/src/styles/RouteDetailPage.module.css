@@ -38,7 +38,7 @@
 /* En móvil y tableta el mapa y la lista de puntos se apilan; en escritorio van lado a lado. */
 .mapLayout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--espacio-lg);
   margin-bottom: var(--espacio-xl);
 }
@@ -67,7 +67,7 @@
 
 @media (min-width: 900px) {
   .mapLayout {
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     align-items: start;
   }
 

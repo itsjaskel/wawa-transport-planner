@@ -1,9 +1,11 @@
-// Creación, borrado y lectura de duties. Aquí vive la garantía central del negocio: una unidad
-// nunca tiene dos duties solapados, ni siquiera con peticiones simultáneas. Ver CLAUDE.md §4.
+// Creación, borrado y lectura de duties, y el borrado de unidades. Aquí vive la garantía central del
+// negocio: una unidad nunca tiene dos duties solapados, ni siquiera con peticiones simultáneas; y
+// nunca se borra una unidad que tenga duties. Ver CLAUDE.md §4.
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 // Mongoose es CommonJS: `Connection` y `ClientSession` solo existen como tipos en ESM.
 import type { ClientSession, Connection, Model } from 'mongoose';
+import { Types } from 'mongoose';
 import {
   API_ERROR_TYPES,
   ApiException,
@@ -31,6 +33,19 @@ export interface ConflictingDutyDetails {
   unitCode: string;
   startAt: Date;
   endAt: Date;
+}
+
+/** Ruta donde una unidad tiene duties, para que la interfaz diga dónde buscarlos. */
+export interface UnitDutyRoute {
+  id: string;
+  name: string;
+  dutyCount: number;
+}
+
+/** Recuento de duties de una unidad agrupado por ruta, tal como sale de la agregación. */
+interface RouteDutyCount {
+  _id: Types.ObjectId;
+  dutyCount: number;
 }
 
 /** Forma mínima de un error del driver de MongoDB con etiquetas. */
@@ -189,6 +204,74 @@ export class DutiesService {
     }
   }
 
+  /** Borra una unidad solo si no tiene duties; 404 si no existe y 409 (con sus rutas) si tiene alguno. */
+  async deleteUnit(unitId: string): Promise<void> {
+    const session = await this.databaseConnection.startSession();
+
+    try {
+      // Sin transacción, una asignación simultánea podría colarse entre el recuento y el borrado
+      // y dejar un duty apuntando a una unidad que ya no existe.
+      await session.withTransaction(() => this.deleteUnitInsideTransaction(unitId, session));
+    } catch (error) {
+      throw translateTransactionError(error);
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /** Comprueba, dentro de la transacción, que la unidad existe y no tiene duties, y la borra. */
+  private async deleteUnitInsideTransaction(unitId: string, session: ClientSession): Promise<void> {
+    const unit = await this.unitModel.findById(unitId, { code: 1 }).session(session).exec();
+    if (!unit) {
+      throw createNotFoundException(`No existe una unidad con id ${unitId}.`);
+    }
+
+    const unitDutyRoutes = await this.findUnitDutyRoutes(unitId, session);
+    if (unitDutyRoutes.length > 0) {
+      throw createUnitInUseException(unit.code, unitDutyRoutes);
+    }
+
+    // Este borrado escribe en el mismo documento que incrementa `lockUnitSchedule` al asignar un
+    // duty. Si las dos operaciones coinciden, MongoDB detecta el conflicto de escritura y obliga a
+    // una a reintentar: o el borrado ve el duty nuevo y responde 409, o la asignación ya no
+    // encuentra la unidad y responde 404. Por eso no hace falta un `$inc` propio aquí.
+    await this.unitModel.deleteOne({ _id: unitId }).session(session).exec();
+  }
+
+  /** Devuelve, dentro de la transacción, las rutas donde la unidad tiene duties y cuántos en cada una. */
+  private async findUnitDutyRoutes(
+    unitId: string,
+    session: ClientSession,
+  ): Promise<UnitDutyRoute[]> {
+    // La agregación no convierte tipos como `find`: el id tiene que ir ya como ObjectId.
+    const routeDutyCounts = await this.dutyModel
+      .aggregate<RouteDutyCount>([
+        { $match: { unitId: new Types.ObjectId(unitId) } },
+        { $group: { _id: '$routeId', dutyCount: { $sum: 1 } } },
+      ])
+      .session(session)
+      .exec();
+
+    if (routeDutyCounts.length === 0) {
+      return [];
+    }
+
+    const routeIds = routeDutyCounts.map((routeDutyCount) => routeDutyCount._id);
+    const routes = await this.routeModel
+      .find({ _id: { $in: routeIds } }, { name: 1 })
+      .session(session)
+      .exec();
+
+    return routeDutyCounts.map((routeDutyCount) => {
+      const route = routes.find((candidate) => candidate._id.equals(routeDutyCount._id));
+      return {
+        id: String(routeDutyCount._id),
+        name: route?.name ?? '(ruta eliminada)',
+        dutyCount: routeDutyCount.dutyCount,
+      };
+    });
+  }
+
   /** Devuelve los duties de una ruta con los datos de su unidad, ordenados por inicio; 404 si la ruta no existe. */
   async findRouteDuties(routeId: string): Promise<DutyDocument[]> {
     const routeExists = await this.routeModel.exists({ _id: routeId }).exec();
@@ -203,6 +286,22 @@ export class DutiesService {
       .populate({ path: 'unit', select: { code: 1, name: 1 } })
       .exec();
   }
+}
+
+/** Crea el 409 de una unidad que no se puede borrar porque tiene duties, indicando en qué rutas. */
+function createUnitInUseException(unitCode: string, unitDutyRoutes: UnitDutyRoute[]): ApiException {
+  const dutyCount = unitDutyRoutes.reduce(
+    (total, unitDutyRoute) => total + unitDutyRoute.dutyCount,
+    0,
+  );
+  const dutyWord = dutyCount === 1 ? 'duty' : 'duties';
+
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    API_ERROR_TYPES.unitInUse,
+    `No se puede eliminar ${unitCode}: tiene ${dutyCount} ${dutyWord}. Elimínalos antes.`,
+    { dutyCount, routes: unitDutyRoutes },
+  );
 }
 
 /** Convierte el agotamiento de los reintentos de la transacción en un 503 claro; el resto de errores pasa intacto. */

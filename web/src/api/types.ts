@@ -40,6 +40,19 @@ export interface Unit {
   updatedAt: string;
 }
 
+/** Datos para cambiar el nombre de una unidad; el código no se edita. */
+export interface UpdateUnitInput {
+  unitId: string;
+  name: string;
+}
+
+/** Ruta donde una unidad tiene duties; viene en el 409 al intentar borrarla. */
+export interface UnitDutyRoute {
+  id: string;
+  name: string;
+  dutyCount: number;
+}
+
 /** Datos para dar de alta una unidad. */
 export interface CreateUnitInput {
   code: string;
