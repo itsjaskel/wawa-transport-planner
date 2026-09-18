@@ -16,6 +16,12 @@ RUN npm ci
 FROM node:24-bookworm-slim AS development
 WORKDIR /app
 ENV NODE_ENV=development
+# `nest start --watch` mata la api anterior buscando sus procesos hijos con `ps`, que la
+# imagen slim no trae. Sin `procps` el fallo es silencioso: la api vieja queda huérfana con
+# el puerto tomado y sigue sirviendo el código anterior (ver CLAUDE.md, error 8).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends procps \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
 USER node

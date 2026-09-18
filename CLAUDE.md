@@ -561,8 +561,15 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   la api tenía el `EADDRINUSE`.
 - **Relación con el error 2:** es posible que el error 2 de la Fase 0 fuera en parte este mismo
   problema y no solo la falta de sondeo. `[supuesto]`
-- **Solución pendiente de aprobación:** instalar `procps` en la etapa `development` de
-  `api/Dockerfile`. Mientras tanto, tras cada cambio en la api: `docker compose restart api`.
+- **Solución:** `procps` instalado en la etapa `development` de `api/Dockerfile`. Comprobado con dos
+  ediciones reales de `main.ts`: en cada una muere la api anterior, arranca la nueva y no aparece
+  `EADDRINUSE`. `[verificado-en-dispositivo]`
+- **Trampa al comprobarlo:** un `touch` desde Windows **no** dispara la recompilación; hace falta
+  cambiar el contenido del archivo. `[verificado-en-dispositivo]`
+- **Efecto secundario, resuelto:** cada api reemplazada quedaba como proceso zombi (`<defunct>`),
+  porque el PID 1 del contenedor era `npm`, que no recoge huérfanos. Se añadió `init: true` al
+  servicio `api` del compose, que pone `docker-init` (tini) como PID 1. Tras dos recargas no queda
+  ningún zombi. `[verificado-en-dispositivo]`
 
 ### 9. Tildes rotas al probar la api con `curl` desde Git Bash
 
@@ -586,6 +593,12 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   `Virtualization Enabled In Firmware: No`.
 - **Solución:** activar *SVM Mode* en la UEFI (ASUS: *Advanced → CPU Configuration*). Es un problema
   de la máquina, no del proyecto. `[verificado-en-dispositivo]`
+- **Efecto secundario:** tras tocar la UEFI, el reloj de Windows quedó **3 horas atrasado** (fuente
+  `Local CMOS Clock`, sin sincronizar). Síntoma: `docker compose build` falla en `apt-get update` con
+  `Release file ... is not valid yet`. Se detectó comparando la hora del host con la cabecera `Date`
+  de `deb.debian.org`. Solución: sincronizar la hora de Windows y reiniciar Docker Desktop. **No** se
+  usó `Acquire::Check-Date=false` en apt: desactivaría una comprobación de seguridad para tapar un
+  problema de la máquina. `[verificado-en-dispositivo]`
 
 ---
 
@@ -608,8 +621,6 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   `[verificado-en-dispositivo]`
 - **El endpoint de disponibilidad de unidades** que necesitaría la vista previa de conflictos de la
   Fase 4 **no está en el contrato de la api** y está pendiente de decisión.
-- **La recarga en caliente de la api no es fiable** hasta que se apruebe instalar `procps` (error 8).
-  Tras cambiar código de la api: `docker compose restart api`. `[verificado-en-dispositivo]`
 - **Mensajes redundantes en un campo con el tipo equivocado:** si `code` llega como número o lista, se
   devuelven a la vez los cuatro mensajes del campo ("debe ser texto", "es obligatorio"…). Es correcto,
   pero ruidoso; se podría cortar en el primer fallo con `stopAtFirstError`. No se ha cambiado.
@@ -670,7 +681,7 @@ cubiertos por `api-exception.filter.spec.ts` y comprobados con `curl` contra la 
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Entorno dockerizado, salud, memoria del proyecto | **Terminada** |
-| 1 | Rutas y unidades, filtro de errores, seed | **Verificada en Docker**; pendiente aprobar `procps` (error 8) |
+| 1 | Rutas y unidades, filtro de errores, seed | **Terminada** y verificada en Docker |
 | 2 | Duties, regla de solapamiento, concurrencia | Pendiente |
 | 3 | Frontend completo | Pendiente |
 | 4 | Swagger, vista previa de conflictos, edición de duty | Opcional |

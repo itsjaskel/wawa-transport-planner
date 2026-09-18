@@ -71,6 +71,9 @@ services:
       context: ./api
       target: development
     container_name: rumbo-api
+    # Pone un init mínimo (tini) como PID 1. Sin él, el PID 1 es `npm`, que no recoge los
+    # procesos huérfanos: cada recarga en caliente dejaba la api anterior como zombi.
+    init: true
     depends_on:
       mongo-init:
         condition: service_completed_successfully
