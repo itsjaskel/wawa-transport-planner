@@ -324,7 +324,13 @@ mongodb://localhost:27018/rumbo?directConnection=true
 
 `directConnection=true` es **obligatorio desde el host**: sin él, el driver intentaría descubrir la
 topología del replica set, recibiría del servidor el nombre del miembro (`mongo:27017`) e intentaría
-resolverlo desde Windows, donde ese nombre no existe.
+resolverlo desde Windows, donde ese nombre no existe. Error exacto sin la opción:
+`MongoServerSelectionError: getaddrinfo ENOTFOUND mongo`. `[verificado-en-dispositivo]` (con el
+driver de Node desde el host: con la opción conecta y ve las tres colecciones; sin ella, falla).
+
+Sin instalar nada: `docker compose exec mongo mongosh rumbo`. `[verificado-en-dispositivo]`. Los
+pasos de MongoDB Compass y de la extensión de VS Code que describe el README **no se han probado**
+en esta máquina: `[supuesto]`, basados en la cadena de conexión verificada.
 
 ### Detener
 

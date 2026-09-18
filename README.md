@@ -295,13 +295,61 @@ docker compose ps -a
 docker compose run --rm seed
 ```
 
-Para conectarte a la base de datos con una herramienta como MongoDB Compass:
+### Conectarte a la base de datos
+
+Con la aplicación iniciada, puedes mirar los datos directamente en MongoDB. No hay usuario ni
+contraseña: en local la base corre sin autenticación a propósito.
+
+**La cadena de conexión es esta**, y sirve para cualquier cliente de MongoDB:
 
 ```
 mongodb://localhost:27018/rumbo?directConnection=true
 ```
 
-El `directConnection=true` es obligatorio desde fuera de Docker.
+Ojo con dos detalles:
+
+- El puerto es **27018**, no el 27017 de siempre, para no chocar con un MongoDB que ya tengas
+  instalado.
+- El `directConnection=true` es **obligatorio**. Sin él, el cliente pregunta a la base por el resto
+  de sus servidores, recibe el nombre interno `mongo` (que solo existe dentro de Docker) y falla con
+  `getaddrinfo ENOTFOUND mongo`.
+
+**Opción 1: MongoDB Compass** (la interfaz gráfica oficial, gratuita):
+
+1. Descárgalo de [mongodb.com/products/tools/compass](https://www.mongodb.com/products/tools/compass)
+   e instálalo.
+2. Pulsa **Add new connection**, pega la cadena de arriba en **URI** y pulsa **Save & Connect**.
+3. Abre la base **`rumbo`**.
+
+**Opción 2: la extensión de MongoDB para VS Code.** Instala *MongoDB for VS Code* desde el panel de
+extensiones, pulsa **Add Connection → Connect with Connection String** y pega la misma cadena.
+
+**Opción 3: desde la terminal, sin instalar nada.** La imagen de MongoDB ya trae su consola:
+
+```bash
+docker compose exec mongo mongosh rumbo
+```
+
+Y dentro, por ejemplo:
+
+```js
+db.units.find()                           // todas las unidades
+db.duties.find().sort({ startAt: 1 })     // todos los duties, por inicio
+```
+
+Lo que vas a encontrar:
+
+| Colección | Qué guarda |
+|---|---|
+| `routes` | Las rutas, con sus puntos dentro (`points`), en orden. |
+| `units` | Las unidades. `scheduleVersion` es el contador del bloqueo de concurrencia: no tiene significado de negocio. |
+| `duties` | Las asignaciones, con `routeId`, `unitId`, `startAt` y `endAt`. Las fechas se guardan en **UTC**. |
+
+Las pruebas de integración usan otra base, **`rumbo_test`**, que se borra entera en cada ejecución.
+
+Un consejo: úsalo para **mirar**, no para editar. Lo que cambies a mano no pasa por las
+validaciones de la api, y un duty escrito directamente en la base se salta también la protección
+contra solapamientos.
 
 ### Problemas frecuentes
 
@@ -311,3 +359,4 @@ El `directConnection=true` es obligatorio desde fuera de Docker.
 | La construcción falla con `Release file ... is not valid yet` | El reloj del equipo está desfasado. Sincroniza la hora del sistema y reinicia Docker Desktop. |
 | `port is already allocated` al iniciar | Otro programa usa el puerto 5173, 3000 o 27018. Ciérralo, o copia `.env.example` a `.env` y cambia el puerto allí. Si cambias `API_PORT`, ajusta también `VITE_API_URL`; si cambias `WEB_PORT`, ajusta también `CORS_ORIGIN`. |
 | Los cambios en el código de la api no se aplican | Reinicia la api: `docker compose restart api`. |
+| Un cliente de base de datos falla con `getaddrinfo ENOTFOUND mongo` | Falta `directConnection=true` en la cadena de conexión. Usa `mongodb://localhost:27018/rumbo?directConnection=true`. |
