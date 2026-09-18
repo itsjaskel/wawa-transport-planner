@@ -1,7 +1,7 @@
 # Bitácora de decisiones
 
 Trabajé con Claude Code (Claude) como asistente. El método fue deliberado: antes de escribir código
-le entregué un documento de requisitos con las decisiones de arquitectura ya tomadas, y trabajamos
+le entregué un documento de requisitos (no el brief de la prueba sino toda una planificación qué es realmente la carga pesada y el corazón de la arquitectura tecnológica para poder guiar al modelo: PROMPT_para_Claude_VSCode.md) con las decisiones de arquitectura ya tomadas, y trabajamos
 **por fases**, sin que la IA pudiera empezar una fase sin mi aprobación explícita ni ejecutar
 comandos de git. Los commits son míos. Toda la memoria del proyecto vive en `CLAUDE.md`, donde cada
 afirmación técnica lleva su nivel de evidencia (`verificado-en-dispositivo`, `compila`,
