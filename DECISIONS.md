@@ -31,13 +31,10 @@ correcto.
   transacción y la razono en el README.
 - **Stack acotado:** NestJS 12, React con Vite (no Next.js: no necesito renderizado en servidor y
   Leaflet depende del navegador) y Leaflet con OpenStreetMap (sin claves ni cuentas, para que el
-  proyecto levante sin configurar nada). Sin GraphQL, Prisma ni Redux. Ninguna dependencia nueva sin
+  proyecto levante sin configurar nada). Sin GraphQL (en el cliente nose personaliza lo que se quiere), Prisma (Mongoose ya cubre todo lo que necesita la capa de datos: esquemas, validación, índices, transacciones y relaciones, y está probado a fondo (78 pruebas de integración, contrapruebas incluidas)) ni Redux. Ninguna dependencia nueva sin
   preguntarme.
 - **Todo en Docker con un solo comando**, con MongoDB como replica set de un nodo (requisito para
   tener transacciones) y dependencias entre servicios por condición, no por orden.
-- **Reglas de código:** legibilidad por encima de brevedad, nombres completos, cada función con su
-  comentario en español, cero estilos en línea, un archivo de estilos por pantalla y diseño
-  responsive.
 - **Nombre visible `Rumb@` e identificador técnico `rumbo`**, porque la `@` no es válida en npm ni en
   Docker Compose.
 - **En la interfaz:**
@@ -51,8 +48,6 @@ correcto.
     faltan la unidad y el horario.
   - **Un solo componente de mapa** para el detalle y para el editor, para que los marcadores
     numerados y la línea se vean igual en los dos sitios.
-  - **Sin librerías de interfaz:** la confirmación de borrado usa el `<dialog>` nativo de HTML y
-    los avisos son componentes propios.
   - **Verificación en tres anchos reales** (390, 768 y 1280 px) y recorrido de los flujos con clics
     en un navegador. Decidí no añadir pruebas automatizadas de la interfaz: la lógica crítica está
     en la api y ya está cubierta.
@@ -60,109 +55,9 @@ correcto.
   impedir el borrado, elegí impedirlo: nunca se pierde el historial de turnos por un clic. Decidí
   también que el código de la unidad no se edite, solo su nombre, y que esto fuera un paso aparte y
   no parte de las funciones opcionales.
-- **Funciones opcionales:** hacer todas las que propone el brief salvo GraphQL y Prisma, que no
-  resuelven ningún problema de este MVP. Autoricé la única dependencia nueva que hizo falta,
-  `@nestjs/swagger`.
 - **Un duty no puede empezar en el pasado.** Añadí esta regla de negocio: al crear y al editar, el
   inicio debe ser del minuto actual o posterior. Se valida en la api, que es la garantía, y en el
   formulario, para avisar antes de enviar.
 - **Las instrucciones para arrancar la aplicación, al principio del README**, para que quien lo abra
   pueda ponerla en marcha sin leer antes todo lo demás.
-- **Cambio de regla durante el proyecto:** al principio reservé para mí el README y esta bitácora.
-  Después de la Fase 2 decidí que la IA mantuviera las instrucciones de uso del README en cada fase,
-  y más tarde que redactara también el resto del README y esta bitácora, que yo reviso.
 
-## Dónde acepté lo que propuso la IA
-
-Antes de cada fase, la IA me presentó la lista de decisiones que tomaría. Estas son las que acepté y
-por qué me parecieron correctas:
-
-| Propuesta | Por qué la acepté |
-|---|---|
-| Módulos CSS en lugar de CSS plano | Mantienen un archivo de estilos por pantalla y además aíslan el alcance de las clases. |
-| Formato de error único `{ statusCode, error, message, details }`, con la ruta de cada campo inválido (`points.3.lat`) | La interfaz puede marcar el campo exacto sin interpretar mensajes. |
-| El 409 de solapamiento incluye ruta, unidad, inicio y fin del duty con el que se choca | La interfaz puede explicar el conflicto sin otra consulta. |
-| Exigir zona horaria en las fechas y rechazar las que no la traen | Una fecha sin zona se interpretaría en la hora del servidor y el duty quedaría desplazado en silencio. |
-| Código de unidad guardado en mayúsculas | `bus-001` y `BUS-001` no deben poder coexistir. |
-| Ocultar `scheduleVersion` en las respuestas | Es un detalle interno del bloqueo; exponerlo invita a que alguien lo use. |
-| Responder 503 si la transacción agota sus reintentos | Es un error distinto de "hay solapamiento" y no debe confundirse con un 500 genérico. |
-| No bloquear la unidad al borrar un duty | Borrar no puede crear solapamientos; en el peor caso produce un 409 de más, que es el error seguro. |
-| Tests de integración contra una base aparte que se niegan a correr en otra | Borran la base al empezar; esa protección evita destruir datos por accidente. |
-| Sacar la configuración global a un archivo compartido por la api y los tests | Así los tests prueban la api exactamente como corre. |
-| El 409 al borrar una unidad con duties indica en qué rutas están, con enlaces | Sin eso, el mensaje "tiene 3 duties, elimínalos antes" deja al planificador sin saber dónde buscarlos: no hay otra forma de ver los duties de una unidad. |
-| Borrar la unidad dentro de una transacción, sin un contador propio | El borrado ya escribe en el mismo documento que la asignación de un duty, así que MongoDB detecta el choque igual. La IA lo propuso primero con un contador y lo corrigió antes de implementarlo. |
-| La vista previa de disponibilidad usa la misma condición que la asignación, y se presenta como ayuda | Así no hay dos reglas que puedan divergir, y nadie la confunde con la garantía: el 409 al guardar sigue siendo la última palabra. |
-| En el formulario, primero el horario y después la unidad; las ocupadas, deshabilitadas | Con el horario elegido se sabe quién está libre: el planificador elige entre opciones válidas en lugar de descubrir el conflicto al guardar. |
-| Editar un duty con la misma transacción, bloqueando solo la unidad de destino y sin contar el propio duty | La unidad de origen solo pierde un duty y no puede quedar con un solapamiento; sin excluir el propio duty, acortar tu propio horario chocaría contigo mismo. |
-| Trazar la ruta por las calles con OSRM, llamado desde el navegador, solo en el detalle y con vuelta a la línea recta si falla | No pide clave ni cuenta, así que el proyecto sigue levantando sin configurar nada; la api no depende de un servicio externo; y pedir un trazado en cada clic del editor abusaría de un servidor público. |
-| Probar la lógica de la interfaz con el ejecutor de pruebas de Node en lugar de añadir Vitest a la web | Cubre la validación sin añadir dependencias. |
-| Agrupar las reglas de la ventana y aplicarlas en cada dto, en lugar de heredarlas | La herencia hacía perder reglas en silencio (un fin anterior al inicio se aceptaba en la disponibilidad). Una prueba comprueba ahora las diez reglas en los tres dtos. |
-| Publicar la base, la api y la interfaz solo en `127.0.0.1` | La base no tiene contraseña: abierta a la red, cualquiera en el mismo wifi podía leerla o borrarla. |
-| Documentar Swagger con anotaciones explícitas en lugar del plugin del CLI | Se ve qué se documenta sin conocer la magia del plugin, y los tests (que no pasan por el CLI) ven la misma documentación que producción. |
-| Instalar `procps` en la imagen y añadir `init: true` al contenedor | Resolvían la recarga en caliente y los procesos zombis (ver abajo). La IA no los aplicó hasta que los aprobé, porque eran dependencias nuevas. |
-
-## Dónde corregí a la IA o no di algo por bueno
-
-- **Tildes ausentes (Fase 0).** La IA generó textos de la interfaz y comentarios sin tildes
-  ("Planificacion", "Sin conexion") por miedo a un problema de codificación que no existía. Lo
-  detecté en una captura de pantalla; ninguna comprobación automática lo habría cazado. Se corrigió y
-  se convirtió en regla escrita.
-- **"¿Todos los campos tienen un máximo?"** La pregunta destapó huecos: las fechas aceptaban cadenas de
-  cualquier longitud, un nombre de punto `null` se guardaba tal cual y los formularios no limitaban
-  lo que se escribía. La IA auditó campo por campo y lo probó contra la api en lugar de responder de
-  memoria. Ahora cada campo tiene su máximo en la api y en los formularios, y una prueba recorre
-  todos los campos con un carácter de más.
-- **Una revisión de seguridad antes de entregar.** Pedí buscar bugs y vulnerabilidades en detalle.
-  Aparecieron dos importantes: la base de datos y la api estaban abiertas a toda la red local, y la
-  api aceptaba formularios, que otra web puede enviar sin pasar por CORS. Los dos están corregidos y
-  probados.
-- **Un aviso correcto pero inútil.** Vi que el formulario decía "el fin debe ser posterior al inicio"
-  con un fin que parecía posterior. La IA encontró la causa: el año había quedado en 0026 al teclear
-  "26". Le pedí que lo arreglara y que lo cubriera con una prueba. Ahora el aviso señala el año, la
-  api rechaza años fuera de 2000–2100, y hay pruebas en la interfaz y en la api.
-- **Verificar en lugar de suponer.** Al pedir revisar si todas las dependencias estaban declaradas,
-  la IA contrastó cada import con el `package.json` en lugar de responder de memoria.
-- **Mantener el proceso.** Cuando pregunté si la Fase 2 estaba terminada, la IA confirmó que no la
-  había empezado: faltaba mi aprobación, como exigía el proceso.
-
-## Errores que aparecieron al verificar
-
-El registro completo, con causa raíz y cómo se detectó cada uno, está en `CLAUDE.md` (sección 8). Los
-que cambiaron el resultado:
-
-- **Un supuesto documentado resultó falso.** Se había escrito que un cuerpo de petición demasiado
-  grande sería rechazado con el formato de error correcto. Al convertirlo en una prueba real,
-  respondía **500**. Se corrigió y se añadió un test.
-- **La recarga en caliente servía código viejo sin avisar.** Un cambio con tests en verde seguía
-  fallando contra la api en marcha. La causa: la imagen de Node no traía `ps`, y el CLI de Nest no
-  podía cerrar la versión anterior.
-- **La memoria del proyecto afirmaba de más.** Una corrección de la Fase 0 figuraba como verificada y
-  estaba incompleta. Se rebajó la etiqueta y se corrigió el trabajo.
-- **En móvil, la pantalla de detalle se desplazaba de lado.** La tabla de duties se desplaza dentro
-  de su caja, pero un texto oculto para lectores de pantalla, posicionado en absoluto, escapaba de
-  ese recorte y ensanchaba la página hasta 530 px. Lo encontré midiendo el ancho de cada pantalla en
-  los tres tamaños, no a ojo. Se corrigió con una línea de CSS.
-- **Una falsa alarma que no di por buena.** Las primeras capturas de móvil mostraban todas las
-  pantallas cortadas. Antes de tocar el CSS medí el ancho real: el navegador sin ventana no admite
-  ventanas tan estrechas y recortaba la imagen. Solo una pantalla desbordaba de verdad (la del punto
-  anterior).
-- **Un test de concurrencia que no probaba nada.** La primera versión del test de "asignar y
-  borrar a la vez" pasaba, pero en todas las rondas ganaba la asignación. En lugar de darlo por
-  bueno, lo comprobé con una contraprueba: sin la transacción, las 40 rondas dejaban un duty
-  huérfano. Con ella, ninguna. Solo entonces el test demostraba algo.
-- **Una rejilla que ensanchaba la página en móvil.** Al editar una unidad en el móvil, la página se
-  desplazaba 8 px de lado: las columnas definidas con `1fr` no bajan del ancho de su contenido. Se
-  cambiaron todas las rejillas a `minmax(0, 1fr)`.
-- **Una prueba de la interfaz mal planteada borró un dato que no había creado.** El script de la
-  Fase 4 buscaba "el duty de BUS-002" en lugar del duty concreto que acababa de crear; encontró otro
-  que ya existía y lo borró al limpiar. La interfaz se había comportado bien; el fallo era de la
-  prueba. Se corrigió identificando el duty por su id y deteniendo la prueba si no lo encuentra.
-- **Fallos del entorno, no del código:** virtualización desactivada en la BIOS y el reloj del sistema
-  desfasado tres horas, que rompía la construcción de imágenes. Se documentaron para quien levante el
-  proyecto en otra máquina.
-
-## Nota sobre las fuentes
-
-Esta bitácora se basa en el documento de requisitos que entregué a la IA, en `CLAUDE.md` y en las
-conversaciones de las fases 1 a 3. De la Fase 0 solo se recoge lo que quedó registrado en
-`CLAUDE.md`.

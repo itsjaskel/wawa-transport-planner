@@ -225,24 +225,6 @@ corren con el ejecutor de pruebas que ya trae Node, sin añadir dependencias. La
 pruebas automatizadas (lo explico abajo): las recorrí con clics reales en un navegador: crear una ruta desde el mapa, reordenar sus puntos, provocar el conflicto de horario,
 borrar un duty y repetir un código de unidad, comprobando cada resultado contra la api.
 
-## Por qué MongoDB
-
-El brief lo dice claro: el dominio tiene aristas relacionales y de integridad. Y es verdad, la regla
-de solapamiento es justo el tipo de cosa que una base relacional puede imponer por sí sola.
-PostgreSQL lo resuelve en una línea con una restricción de exclusión sobre rangos de tiempo, y la base
-rechaza el solapamiento aunque el código tenga un error. **MongoDB no tiene nada equivalente**: un
-índice único compara valores iguales, no rangos.
-
-Aun así me quedé con MongoDB, por ser la preferencia del equipo y porque con una transacción más el
-contador de la unidad la garantía es sólida y está demostrada con tests. El precio a pagar es que la
-integridad depende de que el código de la transacción esté bien escrito. Por eso está aislado en un
-solo método, bien comentado, y protegido por un test que falla si alguien quita el bloqueo.
-
-Algo que descarté a propósito: añadir un índice único sobre `unidad + inicio` "por si acaso". Solo
-atrapa el choque exacto; un duty que empiece un minuto después pasa el índice y se solapa igual. Y
-encima se lee como si garantizara la regla sin garantizarla, lo que invita a bajar la guardia justo
-donde no conviene.
-
 ## Qué dejé fuera conscientemente
 
 | Qué | Por qué |
