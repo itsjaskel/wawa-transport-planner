@@ -181,8 +181,10 @@ aunque la api corra en varias instancias.
 
 ### Integridad y seguridad de la entrada
 
-- Valido toda entrada antes de tocar la base: rangos de latitud y longitud, longitudes de texto,
-  cantidad de puntos, fin posterior al inicio. Repito las mismas reglas en el esquema de la base,
+- Valido toda entrada antes de tocar la base: rangos de latitud y longitud, cantidad de puntos, fin
+  posterior al inicio, y **un máximo para cada campo de texto**, fechas incluidas (código de unidad
+  20 caracteres, nombres 100, fechas 35). Los formularios aplican los mismos máximos para que no se
+  pueda escribir de más, y una prueba recorre todos los campos con un carácter de más. Repito las mismas reglas en el esquema de la base,
   para que ninguna escritura que no pase por la api deje datos inválidos.
 - Rechazo los campos no declarados, lo que impide colar operadores de MongoDB en el cuerpo.
 - Un duty no puede empezar en el pasado: el inicio debe ser del minuto actual o posterior, al crear
@@ -206,7 +208,7 @@ ve exactamente qué se documenta. Una prueba falla si algún endpoint se queda s
 
 ### Pruebas automatizadas
 
-La api tiene 33 pruebas unitarias y 56 de integración contra MongoDB real, incluidas las de
+La api tiene 33 pruebas unitarias y 65 de integración contra MongoDB real, incluidas las de
 concurrencia, y un script de demostración que dispara peticiones simultáneas contra la api en marcha.
 
 La interfaz tiene 10 pruebas de su lógica pura (por ahora, la validación del horario de un duty), que

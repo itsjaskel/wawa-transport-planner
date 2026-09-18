@@ -20,6 +20,7 @@ import {
   selectDrawablePoints,
   type RoutePointDraft,
 } from '../utils/routePointDrafts';
+import { MAX_ROUTE_NAME_LENGTH } from '../config/fieldLimits';
 
 const HTTP_STATUS_NOT_FOUND = 404;
 // Debe coincidir con el mínimo de la api; se comprueba aquí para avisar antes de enviar.
@@ -121,6 +122,7 @@ function RouteForm({ initialRoute }: { initialRoute: Route | undefined }) {
         <input
           id="route-name"
           value={routeName}
+          maxLength={MAX_ROUTE_NAME_LENGTH}
           onChange={(changeEvent) => {
             setRouteName(changeEvent.target.value);
             clearErrors();

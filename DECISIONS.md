@@ -105,6 +105,11 @@ por qué me parecieron correctas:
   ("Planificacion", "Sin conexion") por miedo a un problema de codificación que no existía. Lo
   detecté en una captura de pantalla; ninguna comprobación automática lo habría cazado. Se corrigió y
   se convirtió en regla escrita.
+- **"¿Todos los campos tienen un máximo?"** La pregunta destapó huecos: las fechas aceptaban cadenas de
+  cualquier longitud, un nombre de punto `null` se guardaba tal cual y los formularios no limitaban
+  lo que se escribía. La IA auditó campo por campo y lo probó contra la api en lugar de responder de
+  memoria. Ahora cada campo tiene su máximo en la api y en los formularios, y una prueba recorre
+  todos los campos con un carácter de más.
 - **Un aviso correcto pero inútil.** Vi que el formulario decía "el fin debe ser posterior al inicio"
   con un fin que parecía posterior. La IA encontró la causa: el año había quedado en 0026 al teclear
   "26". Le pedí que lo arreglara y que lo cubriera con una prueba. Ahora el aviso señala el año, la

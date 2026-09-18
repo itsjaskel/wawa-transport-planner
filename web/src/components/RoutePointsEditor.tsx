@@ -4,6 +4,7 @@ import type { FieldMessages } from '../utils/invalidFields';
 import type { RoutePointDraft } from '../utils/routePointDrafts';
 import { Button } from './Button';
 import { FieldErrors } from './FieldErrors';
+import { MAX_COORDINATE_TEXT_LENGTH, MAX_POINT_NAME_LENGTH } from '../config/fieldLimits';
 
 type EditablePointField = 'name' | 'lat' | 'lng';
 
@@ -81,6 +82,7 @@ function PointRow({
           <input
             id={`${fieldIdPrefix}-name`}
             value={pointDraft.name}
+            maxLength={MAX_POINT_NAME_LENGTH}
             onChange={(changeEvent) => onChangePoint(pointIndex, 'name', changeEvent.target.value)}
             aria-invalid={nameMessages !== undefined}
             aria-describedby={`${fieldIdPrefix}-name-errors`}
@@ -92,6 +94,7 @@ function PointRow({
           <input
             id={`${fieldIdPrefix}-lat`}
             inputMode="decimal"
+            maxLength={MAX_COORDINATE_TEXT_LENGTH}
             value={pointDraft.lat}
             onChange={(changeEvent) => onChangePoint(pointIndex, 'lat', changeEvent.target.value)}
             aria-invalid={latMessages !== undefined}
@@ -104,6 +107,7 @@ function PointRow({
           <input
             id={`${fieldIdPrefix}-lng`}
             inputMode="decimal"
+            maxLength={MAX_COORDINATE_TEXT_LENGTH}
             value={pointDraft.lng}
             onChange={(changeEvent) => onChangePoint(pointIndex, 'lng', changeEvent.target.value)}
             aria-invalid={lngMessages !== undefined}

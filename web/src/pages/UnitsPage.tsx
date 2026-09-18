@@ -11,6 +11,7 @@ import { useCreateUnit } from '../hooks/useCreateUnit';
 import { useUnits } from '../hooks/useUnits';
 import styles from '../styles/UnitsPage.module.css';
 import { groupFieldMessages, type FieldMessages } from '../utils/invalidFields';
+import { MAX_UNIT_CODE_LENGTH, MAX_UNIT_NAME_LENGTH } from '../config/fieldLimits';
 
 const DUPLICATE_KEY_ERROR_TYPE = 'DuplicateKey';
 
@@ -56,6 +57,7 @@ function CreateUnitForm({ onUnitCreated }: { onUnitCreated: (successMessage: str
           <input
             id="unit-code"
             value={unitCode}
+            maxLength={MAX_UNIT_CODE_LENGTH}
             placeholder="BUS-004"
             onChange={(changeEvent) => {
               setUnitCode(changeEvent.target.value);
@@ -74,6 +76,7 @@ function CreateUnitForm({ onUnitCreated }: { onUnitCreated: (successMessage: str
           <input
             id="unit-name"
             value={unitName}
+            maxLength={MAX_UNIT_NAME_LENGTH}
             placeholder="Autobús 4"
             onChange={(changeEvent) => {
               setUnitName(changeEvent.target.value);

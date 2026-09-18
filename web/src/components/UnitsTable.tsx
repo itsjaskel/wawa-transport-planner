@@ -10,6 +10,7 @@ import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
 import { FieldErrors } from './FieldErrors';
 import { UnitInUseWarning } from './UnitInUseWarning';
+import { MAX_UNIT_NAME_LENGTH } from '../config/fieldLimits';
 
 interface UnitsTableProps {
   units: Unit[];
@@ -64,6 +65,7 @@ function UnitRow({ unit, onRequestDeletion, onUnitChanged }: UnitRowProps) {
               <input
                 id={nameInputId}
                 value={nameDraft}
+                maxLength={MAX_UNIT_NAME_LENGTH}
                 onChange={(changeEvent) => setNameDraft(changeEvent.target.value)}
                 aria-invalid={nameMessages !== undefined}
                 aria-describedby={`${nameInputId}-errors`}

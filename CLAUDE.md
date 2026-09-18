@@ -338,7 +338,7 @@ transacciones**, lo que rompería la garantía de concurrencia en silencio.
 
 ```bash
 docker compose exec api npm test                   # unitarios (33 tests)
-docker compose exec api npm run test:e2e           # integración contra MongoDB real (56 tests)
+docker compose exec api npm run test:e2e           # integración contra MongoDB real (65 tests)
 docker compose exec web npm test                   # lógica pura de la interfaz, con `node --test` (10)
 docker compose exec api npm run demo:concurrency   # demo por HTTP; opcional: -- --requests=30
 ```
@@ -500,7 +500,12 @@ una media query**, así que los valores se repiten literalmente en cada hoja):
   consulta con `.lean()` se salta el `toJSON` y devolvería `_id`; si se usa `lean` o `aggregate`, la
   proyección debe construir `id` a mano (como hace `findAllRouteSummaries`).
 - **Textos:** los dtos recortan con `@TrimString()` / `@TrimOptionalString()` antes de validar; el
-  segundo convierte el texto vacío en ausente.
+  segundo convierte el texto vacío **o `null`** en ausente.
+- **Todo campo de texto lleva máximo**, también las fechas (`MAX_DATE_TEXT_LENGTH = 35`): `IsISO8601`
+  no acota la longitud y aceptaba cadenas enormes (ver error 16). `test/field-limits.e2e-spec.ts`
+  recorre cada campo con un carácter de más: **al añadir un campo de texto, se añade ahí**. En la web,
+  los mismos máximos van como `maxLength` desde `web/src/config/fieldLimits.ts`, que debe coincidir
+  con la api. `[verificado-en-dispositivo]`
 - **Ids en la url:** siempre con `ParseObjectIdPipe`, que exige 24 dígitos hexadecimales. No se usa
   `Types.ObjectId.isValid` porque acepta cualquier cadena de 12 caracteres. `[verificado-en-dispositivo]`
   (test unitario).
@@ -682,6 +687,8 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
 | Hook del trazado por calles | `web/src/hooks/useRoadRoute.ts` |
 | Resumen de distancia y tiempo bajo el mapa | `web/src/components/RoadRouteSummary.tsx` |
 | Formato de distancias y tiempos de viaje | `web/src/utils/measurements.ts` |
+| Longitudes máximas de los campos de los formularios (espejo de la api) | `web/src/config/fieldLimits.ts` |
+| Prueba de que todo campo de texto de la api tiene máximo | `api/test/field-limits.e2e-spec.ts` |
 | Validación de la ventana de un duty en el formulario, y sus pruebas | `web/src/utils/dutyWindow.ts`, `web/src/utils/dutyWindow.test.ts` |
 | Lista editable de puntos | `web/src/components/RoutePointsEditor.tsx` |
 | Lista de puntos de solo lectura | `web/src/components/RoutePointList.tsx` |
@@ -902,6 +909,19 @@ import mongoose from 'mongoose';  // export por defecto: acceso seguro a mongoos
   - la api rechaza años fuera de 2000–2100 en toda ventana (crear, editar, disponibilidad).
 
   Con pruebas en los dos lados: 7 en la web y 2 de integración. `[verificado-en-dispositivo]`
+
+### 16. Campos sin máximo que nadie había notado
+
+- **Qué falló:** las fechas de un duty aceptaban cadenas de cualquier longitud (una fecha con 500
+  decimales en los segundos se guardó), un nombre de punto `null` se guardaba como `null`, y ningún
+  campo de los formularios tenía `maxLength`.
+- **Causa raíz:** `IsISO8601` valida el formato pero no la longitud, y se había supuesto que el
+  formato bastaba. `@TrimOptionalString` no contemplaba `null`, e `@IsOptional` lo deja pasar.
+- **Cómo se detectó:** el responsable preguntó si todos los campos tenían un máximo. En lugar de
+  responder de memoria, se auditaron los dtos y los formularios y se probó contra la api.
+- **Solución:** `MaxLength` en las fechas, `null` tratado como ausente, `maxLength` en todos los campos
+  de la web, y `field-limits.e2e-spec.ts` para que la pregunta la responda una prueba.
+  `[verificado-en-dispositivo]`
 
 ---
 

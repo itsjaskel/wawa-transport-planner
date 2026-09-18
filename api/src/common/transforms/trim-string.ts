@@ -11,9 +11,13 @@ export function TrimString(): PropertyDecorator {
   });
 }
 
-/** Recorta el texto y convierte el texto vacío en ausente, para campos opcionales. */
+/** Recorta el texto y convierte el texto vacío o `null` en ausente, para campos opcionales. */
 export function TrimOptionalString(): PropertyDecorator {
   return Transform(({ value }) => {
+    // `null` se trata igual que un campo vacío: si no, se guardaría `null` en lugar de nada.
+    if (value === null) {
+      return undefined;
+    }
     if (typeof value !== 'string') {
       return value;
     }
